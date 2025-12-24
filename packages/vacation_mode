@@ -1,0 +1,109 @@
+# Package: Vacation Mode
+# Description: Handles climate, security, and presence simulation when away.
+
+# 1. The Trigger Switch
+input_boolean:
+  vacation_mode:
+    name: Vacation Mode
+    icon: mdi:airplane-takeoff
+
+# 2. Automations
+automation:
+  # ---------------------------------------------------------
+  # CLIMATE CONTROL
+  # Sets thermostat to 18°C when ON, back to 21°C when OFF.
+  # ---------------------------------------------------------
+  - alias: "Vacation Mode: Climate Control"
+    id: vacation_mode_climate_control
+    trigger:
+      - platform: state
+        entity_id: input_boolean.vacation_mode
+    action:
+      - choose:
+          # When turned ON
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.vacation_mode
+                state: "on"
+            sequence:
+              - action: climate.set_temperature
+                target:
+                  entity_id: climate.thuis  # Using 'Thermostaat Woonkamer' found in your context
+                data:
+                  temperature: 18
+          # When turned OFF
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.vacation_mode
+                state: "off"
+            sequence:
+              - action: climate.set_temperature
+                target:
+                  entity_id: climate.thuis
+                data:
+                  temperature: 21
+
+  # ---------------------------------------------------------
+  # SECURITY ALERT
+  # Critical notification if front door opens.
+  # ---------------------------------------------------------
+  - alias: "Vacation Mode: Security Alert"
+    id: vacation_mode_security_alert
+    trigger:
+      - platform: state
+        # PLEASE UPDATE: Replace with your actual door sensor entity ID
+        entity_id: binary_sensor.voordeur_contact_CHANGE_ME 
+        to: "on"
+    condition:
+      - condition: state
+        entity_id: input_boolean.vacation_mode
+        state: "on"
+    action:
+      # Using your Telegram group from context as a reliable fallback
+      - action: notify.telegram_thuisapp 
+        data:
+          message: "🚨 ALARM: Front door opened while in Vacation Mode!"
+          title: "Security Alert"
+
+  # ---------------------------------------------------------
+  # PRESENCE SIMULATION
+  # Toggles Living Room Group randomly between Sunset and 23:00.
+  # ---------------------------------------------------------
+  - alias: "Vacation Mode: Presence Simulation"
+    id: vacation_mode_presence_simulation
+    trigger:
+      # Start at sunset
+      - platform: sun
+        event: sunset
+      # Or if we turn Vacation Mode on manually after sunset but before 23:00
+      - platform: state
+        entity_id: input_boolean.vacation_mode
+        to: "on"
+    condition:
+      - condition: state
+        entity_id: input_boolean.vacation_mode
+        state: "on"
+      - condition: sun
+        after: sunset
+      - condition: time
+        before: "23:00:00"
+    action:
+      - repeat:
+          # Keep looping while it is active and before 23:00
+          while:
+            - condition: state
+              entity_id: input_boolean.vacation_mode
+              state: "on"
+            - condition: time
+              before: "23:00:00"
+          sequence:
+            - action: light.toggle
+              target:
+                entity_id: light.woonkamer_plafond # The group defined in light_groups.yaml
+            # Random delay between 15 min (900s) and 45 min (2700s)
+            - delay: "{{ range(900, 2700) | random }}"
+
+      # Cleanup: Ensure lights are OFF when the loop finishes (at 23:00 or if mode is turned off)
+      - action: light.turn_off
+        target:
+          entity_id: light.woonkamer_plafond

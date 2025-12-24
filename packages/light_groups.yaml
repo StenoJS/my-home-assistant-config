@@ -1,0 +1,29 @@
+# Package: Light Groups
+# Description: Groups individual bulbs into controllable fixtures.
+
+light:
+  # ---------------------------------------------------------
+  # DINING TABLE (Eettafel)
+  # Grouping 5 bulbs into one entity: light.eettafel_lampen
+  # ---------------------------------------------------------
+  - platform: group
+    name: "Eettafel Lampen"
+    unique_id: light_group_eettafel_lights
+    entities:
+      - light.eettafel_1  #
+      - light.eettafel_2
+      - light.eettafel_3
+      - light.eettafel_4
+      - light.eettafel_5
+
+  # ---------------------------------------------------------
+  # LIVING ROOM CEILING (Woonkamer Plafond)
+  # Grouping 3 bulbs into one entity: light.woonkamer_plafond
+  # ---------------------------------------------------------
+  - platform: group
+    name: "Woonkamer Plafond"
+    unique_id: light_group_woonkamer_plafond
+    entities:
+      - light.woonkamer_1  #
+      - light.woonkamer_2
+      - light.woonkamer_3
