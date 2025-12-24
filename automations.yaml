@@ -151,48 +151,6 @@
       person_entity: person.mika
       zone_entity: zone.bataafs
       notify_device: 84191f1f59716ea363ae7af551f524d5
-- id: '1758563565736'
-  alias: 'AI: Kleur naar Afbeelding'
-  description: Start het proces na een Telegram commando
-  triggers:
-  - event_type: telegram_command
-    event_data:
-      command: /afbeelding
-    trigger: event
-    context:
-      user_id:
-      - d9b943370ea14a74a451a632d095d697
-  actions:
-  - action: telegram_bot.send_message
-    data:
-      target: -1002650914819
-      title: "\U0001F3A8 *AI Image Generator*"
-      message: 'Kies een kleur voor de afbeelding:'
-      inline_keyboard:
-      - "\U0001F534 Rood:/rood, \U0001F7E1 Geel:/geel, \U0001F7E2 Groen:/groen"
-  - wait_for_trigger:
-    - event_type: telegram_callback
-      event_data:
-        command:
-        - /rood
-        - /geel
-        - /groen
-      trigger: event
-    timeout: 00:02:00
-    continue_on_timeout: false
-  - action: ai_task.generate_image
-    data:
-      task_name: AI Image
-      instructions: Create a high-quality cinematic image featuring the color {{ wait.trigger.event.data.data
-        | replace('/', '') }}
-    response_variable: ai_result
-  - action: telegram_bot.send_photo
-    data:
-      target: -1002650914819
-      url: '{{ ai_result.image_url }}'
-      caption: 'Hier is je afbeelding in de kleur: {{ wait.trigger.event.data.data
-        | replace(''/'', '''') }}'
-  mode: restart
 - id: '1758998834542'
   alias: Mika gaat naar bed
   description: ''
@@ -828,83 +786,26 @@
     data:
       message: Wasmachine is klaar
   mode: single
-- id: eetkamer_licht_thuiskomst
+- id: 'eetkamer_licht_thuiskomst_combined'
   alias: Eetkamer Licht aan bij Donkere Thuiskomst
-  description: Schakelt Lamp Eettafel 3 aan als het donker is en er één persoon thuis
-    komt.
+  description: Schakelt Lamp Eettafel 3 aan als het donker is en er iemand thuiskomt (aantal personen stijgt).
   triggers:
-  - entity_id: group.all_persons
-    from: not_home
-    to: home
-    trigger: state
-  - entity_id: sensor.aantal_personen_thuis
-    from: '3'
-    to: '4'
-    trigger: state
+    - platform: state
+      entity_id: sensor.aantal_personen_thuis
   conditions:
-  - condition: state
-    entity_id: sun.sun
-    state: below_horizon
-  - condition: numeric_state
-    entity_id: sensor.aantal_personen_thuis
-    above: 0
-    below: 2
+    - condition: state
+      entity_id: sun.sun
+      state: "below_horizon"
+    - condition: template
+      value_template: >
+        {{ trigger.to_state.state | int(0) > trigger.from_state.state | int(0) }}
+    - condition: numeric_state
+      entity_id: sensor.aantal_personen_thuis
+      above: 0
   actions:
-  - target:
-      entity_id: light.lamp_eettafel_3
-    action: homeassistant.turn_on
-  mode: single
-- id: eetkamer_licht_thuiskomst
-  alias: Eetkamer Licht aan bij Donkere Thuiskomst
-  description: Schakelt Lamp Eettafel 3 aan als het donker is en er één persoon thuis
-    komt.
-  triggers:
-  - entity_id: group.all_persons
-    from: not_home
-    to: home
-    trigger: state
-  - entity_id: sensor.aantal_personen_thuis
-    from: '3'
-    to: '4'
-    trigger: state
-  conditions:
-  - condition: state
-    entity_id: sun.sun
-    state: below_horizon
-  - condition: numeric_state
-    entity_id: sensor.aantal_personen_thuis
-    above: 0
-    below: 4
-  actions:
-  - target:
-      entity_id: light.lamp_eettafel_3
-    action: homeassistant.turn_on
-  mode: single
-- id: eetkamer_licht_thuiskomst
-  alias: Eetkamer Licht aan bij Donkere Thuiskomst
-  description: Schakelt Lamp Eettafel 3 aan als het donker is en er één persoon thuis
-    komt.
-  triggers:
-  - entity_id: group.all_persons
-    from: not_home
-    to: home
-    trigger: state
-  - entity_id: sensor.aantal_personen_thuis
-    from: '0'
-    to: '1'
-    trigger: state
-  conditions:
-  - condition: state
-    entity_id: sun.sun
-    state: below_horizon
-  - condition: numeric_state
-    entity_id: sensor.aantal_personen_thuis
-    above: 0
-    below: 2
-  actions:
-  - target:
-      entity_id: light.lamp_eettafel_3
-    action: homeassistant.turn_on
+    - target:
+        entity_id: light.lamp_eettafel_3
+      action: light.turn_on
   mode: single
 - id: '1763327431528'
   alias: Verwarming serre uit
