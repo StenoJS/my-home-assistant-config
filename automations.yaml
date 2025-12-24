@@ -92,14 +92,10 @@
     tag_id: 7d6c5bbb-edd2-4bf8-abe7-982bf05577c5
   conditions: []
   actions:
-  - action: telegram_bot.send_message
-    metadata: {}
+  - action: script.send_telegram_message
     data:
-      config_entry_id: 01JZCTCESSYMW9DE7M4EPX72WQ
-      message: Linda gaat slapen.
-      title: Welterusten!
-      target:
-      - '-1002657409149'
+      message_text: "😴 Linda gaat slapen. Welterusten!"
+      caller_id: "{{ this.entity_id }}"
       disable_notification: true
   - action: light.turn_off
     metadata: {}
@@ -392,12 +388,10 @@
       message: De droger is klaar met drogen, veel plezier met uitpakken en opruimen....
     target:
       device_id: ae4f80b8aade1f304ae2d88f2f17404b
-  - action: telegram_bot.send_message
-    metadata: {}
+  - action: script.send_telegram_message
     data:
-      message: Droger is klaar
-      target:
-      - '-1002657409149'
+      message_text: "🧺 De droger is klaar!"
+      caller_id: "{{ this.entity_id }}"
   mode: single
 - id: '1760389566643'
   alias: Jeroen muziek slapen
