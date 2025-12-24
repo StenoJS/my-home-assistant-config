@@ -29,33 +29,47 @@ het_eten_is_klaar:
   description: ''
   icon: mdi:food
 send_telegram_message:
-  alias: Send Telegram Message test/production
-  description: Verstuurt een Telegram bericht met dynamische chat ID en status.
+  alias: Send Smart Telegram Message
+  description: Routes messages to Test or Family chat based on labels. Debug info is hidden in Production.
   fields:
     message_text:
-      description: De hoofdtekst van het bericht.
-      example: Dit is een bericht.
+      description: The message content.
       required: true
       selector:
         text:
     caller_id:
-      description: De Entity ID van de automatisering/script die het bericht aanroept.
-      example: automation.tag_scan_tts
+      description: Entity ID of the caller (for label checking).
       required: true
       selector:
-        text:
+        entity:
   sequence:
   - variables:
-      caller_entity_id: '{{ caller_id }}'
-      automation_labels: '{{ labels(caller_entity_id) | default([], true) }}'
-  - data:
-      target: "{# DE FIX: Controleert op de kleine letter 'test' #} {% if 'test' in
-        automation_labels %}\n  {{ states('input_text.telegram_chatid_test') }}\n{%
-        else %}\n  {{ states('input_text.telegram_chatid_family') }}\n{% endif %}\n"
-      message: "[**{{ caller_entity_id }}**] {{ message_text }}\n{# TOONT LABELS TER
-        CONTROLE (zoals ze zijn opgehaald) #} {% if automation_labels | length > 0
-        %}\n  Labels: {{ automation_labels | join(', ') }}\n{% else %}\n  Labels:
-        Geen\n{% endif %}\n{# WEERGAVE VAN DE MODUS met de kleine letter check #}
-        Modus: {% if 'test' in automation_labels %}\n  TEST (Test-chat)\n{% else %}\n
-        \ PRODUCTIE (Familie-chat)\n{% endif %}\n"
-    action: telegram_bot.send_message
+      # Get labels for the calling entity
+      labels_list: "{{ labels(caller_id) | default([], true) }}"
+      is_test_mode: "{{ 'test' in labels_list }}"
+      
+      # Determine Target Chat
+      target_chat: >
+        {% if is_test_mode %}
+          {{ states('input_text.telegram_chatid_test') }}
+        {% else %}
+          {{ states('input_text.telegram_chatid_family') }}
+        {% endif %}
+
+      # Construct Message: Only add debug info if in Test Mode
+      final_message: >
+        {{ message_text }}
+        {% if is_test_mode %}
+        
+        --- 🛠 DEBUG INFO ---
+        Caller: {{ caller_id }}
+        Mode: TEST
+        Labels: {{ labels_list | join(', ') }}
+        {% endif %}
+
+  - action: telegram_bot.send_message
+    data:
+      target: "{{ target_chat }}"
+      message: "{{ final_message }}"
+      # Optional: Add parse_mode if you use Markdown/HTML often
+      parse_mode: markdown
