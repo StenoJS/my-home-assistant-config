@@ -1,0 +1,1011 @@
+- id: '1748102162126'
+  alias: cam test
+  description: test
+  triggers:
+  - trigger: event
+    event_type: test
+    context:
+      user_id:
+      - d9b943370ea14a74a451a632d095d697
+  conditions: []
+  actions:
+  - action: camera.snapshot
+    metadata: {}
+    data:
+      filename: /tmp/screenshot.jpg
+    target:
+      device_id: 05dea9ea65d1abf47cc9854104e4f77e
+  mode: single
+- id: '1757887664099'
+  alias: Jeroen slaapt
+  description: ''
+  triggers:
+  - type: value
+    device_id: 84191f1f59716ea363ae7af551f524d5
+    entity_id: 9c6eeac384b6926589b5561811740da9
+    domain: sensor
+    trigger: device
+    above: 70
+    for:
+      hours: 0
+      minutes: 2
+      seconds: 0
+  conditions:
+  - condition: device
+    device_id: e11515b5cbbf2bd85bfedc2570404694
+    domain: media_player
+    entity_id: 1ae9f5492a3cc957630b17cbe2e2128a
+    type: is_playing
+  - condition: time
+    after: '23:00:00'
+    before: 05:00:00
+  actions:
+  - action: media_player.media_stop
+    metadata: {}
+    data: {}
+    target:
+      device_id: e11515b5cbbf2bd85bfedc2570404694
+  - type: turn_off
+    device_id: bf7a8a2177420bfc77160a870bf21f1c
+    entity_id: 73498bf055ffe818178047cc6a1b6086
+    domain: light
+  mode: single
+- id: '1757952541099'
+  alias: Rolluik keuken dicht
+  description: ''
+  triggers:
+  - trigger: time
+    at: '20:00:00'
+  conditions:
+  - condition: device
+    device_id: e5d7fe31d9605b456d917c2391570052
+    domain: cover
+    entity_id: 896df82a6bcac5645ba98cc6f7407204
+    type: is_open
+  actions:
+  - device_id: e5d7fe31d9605b456d917c2391570052
+    domain: cover
+    entity_id: 896df82a6bcac5645ba98cc6f7407204
+    type: close
+  mode: single
+- id: '1758214349334'
+  alias: Mika vertrekt Kulturhus
+  description: ''
+  triggers:
+  - trigger: zone
+    entity_id: person.mika
+    zone: zone.kulturhus
+    event: enter
+  conditions: []
+  actions:
+  - action: telegram_bot.send_message
+    metadata: {}
+    data:
+      message: Test
+      config_entry_id: 01JZCTCESSYMW9DE7M4EPX72WQ
+  mode: single
+- id: '1758560432800'
+  alias: Linda gaat slapen
+  description: ''
+  triggers:
+  - trigger: tag
+    tag_id: 7d6c5bbb-edd2-4bf8-abe7-982bf05577c5
+  conditions: []
+  actions:
+  - action: telegram_bot.send_message
+    metadata: {}
+    data:
+      config_entry_id: 01JZCTCESSYMW9DE7M4EPX72WQ
+      message: Linda gaat slapen.
+      title: Welterusten!
+      target:
+      - '-1002657409149'
+      disable_notification: true
+  - action: light.turn_off
+    metadata: {}
+    data: {}
+    target:
+      area_id: slaapkamer
+  - device_id: 0a2e48e7c2e32e184da4887352932c84
+    domain: cover
+    entity_id: c0ce832ebed6680c94e52346ac95d14f
+    type: close
+  mode: single
+- id: '1758561834145'
+  alias: Lampen aan bij zonsondergang
+  description: Zet de lichten aan 20 minuten voor zonsondergang als er iemand thuis
+    is.
+  triggers:
+  - event: sunset
+    offset: -0:20:00
+    trigger: sun
+  conditions:
+  - condition: or
+    conditions:
+    - condition: zone
+      entity_id: person.linda
+      zone: zone.home
+    - condition: zone
+      entity_id: person.jeroen
+      zone: zone.home
+    - condition: zone
+      entity_id: person.mika
+      zone: zone.home
+    - condition: zone
+      entity_id: person.yulian
+      zone: zone.home
+  actions:
+  - type: turn_on
+    device_id: 5f8e04cf7a18c6d6bcfc8fb711760c99
+    entity_id: fa060099b9f3cce702a11dc190b7530a
+    domain: light
+  - delay: 00:20:00
+  - target:
+      entity_id: light.plafond
+    data:
+      brightness_pct: 75
+    action: light.turn_on
+  mode: single
+- id: '1758563019847'
+  alias: Zone Notification
+  description: ''
+  use_blueprint:
+    path: homeassistant/notify_leaving_zone.yaml
+    input:
+      person_entity: person.mika
+      zone_entity: zone.bataafs
+      notify_device: 84191f1f59716ea363ae7af551f524d5
+- id: '1758563565736'
+  alias: 'AI: Kleur naar Afbeelding'
+  description: Start het proces na een Telegram commando
+  triggers:
+  - event_type: telegram_command
+    event_data:
+      command: /afbeelding
+    trigger: event
+    context:
+      user_id:
+      - d9b943370ea14a74a451a632d095d697
+  actions:
+  - action: telegram_bot.send_message
+    data:
+      target: -1002650914819
+      title: "\U0001F3A8 *AI Image Generator*"
+      message: 'Kies een kleur voor de afbeelding:'
+      inline_keyboard:
+      - "\U0001F534 Rood:/rood, \U0001F7E1 Geel:/geel, \U0001F7E2 Groen:/groen"
+  - wait_for_trigger:
+    - event_type: telegram_callback
+      event_data:
+        command:
+        - /rood
+        - /geel
+        - /groen
+      trigger: event
+    timeout: 00:02:00
+    continue_on_timeout: false
+  - action: ai_task.generate_image
+    data:
+      task_name: AI Image
+      instructions: Create a high-quality cinematic image featuring the color {{ wait.trigger.event.data.data
+        | replace('/', '') }}
+    response_variable: ai_result
+  - action: telegram_bot.send_photo
+    data:
+      target: -1002650914819
+      url: '{{ ai_result.image_url }}'
+      caption: 'Hier is je afbeelding in de kleur: {{ wait.trigger.event.data.data
+        | replace(''/'', '''') }}'
+  mode: restart
+- id: '1758998834542'
+  alias: Mika gaat naar bed
+  description: ''
+  triggers:
+  - trigger: time
+    at: '20:30:00'
+  conditions: []
+  actions:
+  - type: turn_on
+    device_id: 779b6b049fbb611bcbe96f79f4d48857
+    entity_id: 940d701feb090f1ab11f7dfd1a216992
+    domain: light
+    brightness_pct: 75
+    enabled: false
+  - action: music_assistant.play_media
+    data:
+      enqueue: replace
+      media_type: playlist
+      media_id: Disney Hits NL
+    target:
+      device_id: a7496df81cb4a3081783686dc4d5e64f
+  mode: single
+- id: '1759398926505'
+  alias: Melding dat Jeroen naar de bridge vertrekt
+  description: ''
+  triggers:
+  - device_id: 84191f1f59716ea363ae7af551f524d5
+    domain: device_tracker
+    entity_id: 4f827da021f4847e4148c381ab51253e
+    type: leaves
+    trigger: device
+    zone: zone.home
+  conditions:
+  - condition: time
+    weekday:
+    - tue
+    after: '18:15:00'
+    before: '19:00:00'
+  actions:
+  - action: telegram_client.send_messages
+    metadata: {}
+    data:
+      target_username:
+      - '@damoi'
+      message: Yo, ik ben zojuist vertrokken.
+  - wait_for_trigger:
+    - trigger: zone
+      entity_id: person.jeroen
+      zone: zone.tim_linda_150m
+      event: enter
+  - action: telegram_client.send_messages
+    metadata: {}
+    data:
+      target_username:
+      - '@Damoi'
+      message: Bijna voor de deur, komt u? :-)
+  mode: single
+- id: '1759427399734'
+  alias: Tag Genie is gescand
+  description: ''
+  triggers:
+  - trigger: tag
+    tag_id: f2dd6822-3af0-46a8-935c-6c7ea654c068
+  conditions: []
+  actions:
+  - type: turn_on
+    device_id: 1d3c5407eb83abbb1f168f535fa7273f
+    entity_id: 2b86f9da8f1c1e807545efb035f1b9b6
+    domain: switch
+    enabled: false
+  - delay:
+      hours: 0
+      minutes: 15
+      seconds: 0
+      milliseconds: 0
+    enabled: false
+  - type: toggle
+    device_id: 1d3c5407eb83abbb1f168f535fa7273f
+    entity_id: 2b86f9da8f1c1e807545efb035f1b9b6
+    domain: switch
+    enabled: true
+  mode: single
+- id: '1759603424215'
+  alias: Switch TV source to YouTube by Default
+  description: Regardless if started from TV remote or via wake-on-lan, the TV will
+    switch to YouTube right after it is on
+  triggers:
+  - device_id: 8c2a6fcaa4205408f5a711cbb2c711e5
+    domain: media_player
+    entity_id: media_player.lg_webos_tv_oled55cx9la
+    type: turned_on
+    trigger: device
+  conditions: []
+  actions:
+  - delay:
+      hours: 0
+      minutes: 0
+      seconds: 2
+      milliseconds: 0
+  - action: media_player.select_source
+    metadata: {}
+    data:
+      source: YouTube
+    target:
+      device_id: 8c2a6fcaa4205408f5a711cbb2c711e5
+  - delay:
+      hours: 0
+      minutes: 0
+      seconds: 2
+      milliseconds: 0
+  - action: webostv.button
+    metadata: {}
+    data:
+      entity_id: media_player.lg_webos_tv_oled55cx9la
+      button: ENTER
+  mode: single
+- id: '1759604771780'
+  alias: Switch2 kiezen op TV Serre
+  description: Switch2 kiezen op TV Serre
+  triggers:
+  - device_id: 8c2a6fcaa4205408f5a711cbb2c711e5
+    domain: media_player
+    entity_id: media_player.lg_webos_tv_oled55cx9la
+    type: turned_on
+    trigger: device
+    enabled: false
+  conditions: []
+  actions:
+  - delay:
+      hours: 0
+      minutes: 0
+      seconds: 2
+      milliseconds: 0
+  - action: media_player.select_source
+    metadata: {}
+    data:
+      source: Switch2
+    target:
+      device_id: 8c2a6fcaa4205408f5a711cbb2c711e5
+  - delay:
+      hours: 0
+      minutes: 0
+      seconds: 2
+      milliseconds: 0
+  - action: webostv.button
+    metadata: {}
+    data:
+      entity_id: media_player.lg_webos_tv_oled55cx9la
+      button: ENTER
+  mode: single
+- id: eetkamer_licht_thuiskomst
+  alias: Eetkamer Licht aan bij Donkere Thuiskomst
+  description: Schakelt Lamp Eettafel 3 aan als het donker is en er één persoon thuis
+    komt.
+  triggers:
+  - entity_id: group.all_persons
+    from: not_home
+    to: home
+    trigger: state
+  - entity_id: sensor.aantal_personen_thuis
+    from: '0'
+    to: '1'
+    trigger: state
+  conditions:
+  - condition: state
+    entity_id: sun.sun
+    state: below_horizon
+  - condition: numeric_state
+    entity_id: sensor.aantal_personen_thuis
+    above: 0
+    below: 2
+  actions:
+  - target:
+      entity_id: light.lamp_eettafel_3
+    action: homeassistant.turn_on
+  mode: single
+- id: '1760282282958'
+  alias: Droger is klaar
+  description: ''
+  triggers:
+  - type: turned_on
+    device_id: 99fdf783c9256bdd434040a1d89a55cd
+    entity_id: 023ef6bca979e4c1c1fae3e42f0295e4
+    domain: binary_sensor
+    trigger: device
+  conditions: []
+  actions:
+  - action: tts.speak
+    metadata: {}
+    data:
+      cache: true
+      media_player_entity_id: media_player.begane_grond_2
+      message: De droger is klaar met drogen, veel plezier met uitpakken en opruimen....
+    target:
+      device_id: ae4f80b8aade1f304ae2d88f2f17404b
+  - action: telegram_bot.send_message
+    metadata: {}
+    data:
+      message: Droger is klaar
+      target:
+      - '-1002657409149'
+  mode: single
+- id: '1760389566643'
+  alias: Jeroen muziek slapen
+  description: ''
+  triggers:
+  - trigger: state
+    entity_id:
+    - input_boolean.jeroen_gaat_slapen
+    from: 'off'
+    to: 'on'
+    enabled: true
+  conditions: []
+  actions:
+  - action: media_player.shuffle_set
+    metadata: {}
+    data:
+      shuffle: true
+    target:
+      device_id: e11515b5cbbf2bd85bfedc2570404694
+  - action: tts.speak
+    metadata: {}
+    data:
+      cache: true
+      message: Welterusten {{ friendly_user_name }}, slaap lekker en tot morgen!
+      media_player_entity_id: media_player.begane_grond_2
+    target:
+      device_id: ae4f80b8aade1f304ae2d88f2f17404b
+  - device_id: 1b482ea89bb835f7073b5ee7605ff2e0
+    domain: cover
+    entity_id: 83a2e6105a67dd0ad5a3300b449fb74b
+    type: close
+  - action: light.turn_off
+    metadata: {}
+    data: {}
+    target:
+      floor_id: begane_grond
+  - action: input_boolean.turn_off
+    metadata: {}
+    data: {}
+    target:
+      entity_id: input_boolean.jeroen_gaat_slapen
+  - action: media_player.volume_set
+    metadata: {}
+    data:
+      volume_level: 0.2
+    target:
+      device_id: e11515b5cbbf2bd85bfedc2570404694
+  - action: music_assistant.play_media
+    data:
+      media_type: playlist
+      enqueue: replace
+      media_id: library://playlist/3
+    target:
+      device_id: e11515b5cbbf2bd85bfedc2570404694
+  - wait_for_trigger:
+    - trigger: state
+      entity_id:
+      - person.jeroen
+      - sensor.telefoon_jeroen_sleep_confidence
+      for:
+        hours: 0
+        minutes: 5
+        seconds: 0
+      to: '70'
+    continue_on_timeout: false
+  - action: media_player.media_stop
+    metadata: {}
+    data: {}
+    target:
+      device_id: e11515b5cbbf2bd85bfedc2570404694
+  - type: turn_off
+    device_id: bf7a8a2177420bfc77160a870bf21f1c
+    entity_id: 73498bf055ffe818178047cc6a1b6086
+    domain: light
+  mode: single
+- id: '1760642111321'
+  alias: Tag Mika is gescand
+  description: ''
+  triggers:
+  - trigger: tag
+    tag_id: 659935d2-88d7-41c8-bfd6-8b54caf5b1e8
+  conditions: []
+  actions:
+  - action: music_assistant.play_media
+    data:
+      enqueue: replace
+      media_type: playlist
+      media_id: Disney Hits NL
+    target:
+      device_id: a7496df81cb4a3081783686dc4d5e64f
+  mode: single
+- id: '1760982959816'
+  alias: Start Live Locatie naar Tim voor Bridge
+  description: Start live locatie update naar Tim als ik van huis vertrek voor de
+    Bridge afspraak.
+  triggers:
+  - event: start
+    entity_id: calendar.steenhagen_jeroen_gmail_com
+    offset: -01:00:00
+    trigger: calendar
+  conditions:
+  - condition: template
+    value_template: '{{ ''bridgen met Tim'' in afspraak_titel | lower }}'
+  actions:
+  - wait_for_trigger:
+    - entity_id: person.jeroen
+      zone: zone.home
+      event: leave
+      trigger: zone
+  - data:
+      target_username:
+      - '@damoi'
+      message: Yo, ik ben zojuist vertrokken voor {{ afspraak_titel }}.
+    action: telegram_client.send_messages
+  variables:
+    afspraak_titel: '{{ trigger.calendar_event.summary }}'
+  mode: single
+- id: '1761249678906'
+  alias: Wifi Aan-Uit
+  description: ''
+  triggers:
+  - device_id: 84191f1f59716ea363ae7af551f524d5
+    domain: device_tracker
+    entity_id: 4f827da021f4847e4148c381ab51253e
+    type: enters
+    trigger: device
+    zone: zone.home
+  conditions: []
+  actions: []
+  mode: single
+- id: '1761312484635'
+  alias: Voeg 15 Tijd Toe en Stuur Telegram
+  description: Voegt 15 toe aan de resterende tijd en meldt de wijziging via Telegram.
+  triggers:
+  - entity_id: sensor.kc_yulian_reward_status_reward1
+    to: Approved
+    trigger: state
+  conditions: []
+  actions:
+  - target:
+      entity_id: sensor.switch_2_time_remaining
+    data:
+      value: '{{ nieuwe_tijd }}'
+    action: input_number.set_value
+  - data:
+      message: 'Beloning verwerkt: Yulian''s Switch tijd is aangepast!
+
+        Switch tijd was: {{ oude_tijd }} minuten.
+
+        Nieuwe tijd is: {{ nieuwe_tijd }} minuten.
+
+        Gefeliciteerd met de ''Approved'' beloning!
+
+        '
+    action: telegram_bot.send_message
+  variables:
+    oude_tijd: '{{ states(''sensor.switch_2_time_remaining'') | int(0) }}'
+    nieuwe_tijd: '{{ oude_tijd + 15 }}'
+  mode: single
+- id: '1761317396119'
+  alias: KC Ouder - Beloning Goedkeuring Vereist
+  description: Stuur Telegram met APPROVE/DISAPPROVE knoppen bij geclaimde beloning
+    voor elk kind.
+  triggers:
+  - entity_id:
+    - sensor.kc_yulian_reward_status_reward_1
+    - sensor.kc_yulian_reward_status_reward2
+    to: claimed
+    trigger: state
+  actions:
+  - data:
+      target: '{{ states(''input_text.telegram_chatid_family'') }}'
+      message: "\U0001F6A8 **OUDER ACTIE VEREIST!** \U0001F6A8\n\n**{{ child_name
+        | capitalize }}** heeft de beloning **'{{ reward_name }}'** geclaimd.\n\nWil
+        je deze goedkeuren?\n"
+      inline_keyboard:
+      - TEST:/Test
+      - ✅ GOEDKEUREN:/kc_approve_test
+      - ❌ AFKEUREN:/kc_disapprove_{{ child_name }}_{{ reward_suffix }}
+    action: telegram_bot.send_message
+  variables:
+    trigger_id: '{{ trigger.entity_id }}'
+    child_name: '{{ trigger_id | regex_replace(''^sensor\.kc_(\w+)_reward_status_(.+)$'',
+      ''\1'') }}'
+    reward_suffix: '{{ trigger_id | regex_replace(''^sensor\.kc_(\w+)_reward_status_(.+)$'',
+      ''\2'') }}'
+    reward_name: '{{ state_attr(trigger_id, ''friendly_name'') }}'
+  mode: single
+- id: '1761317508732'
+  alias: KC Ouder - Verwerk Beloning Goedkeuring
+  description: Stelt de beloningsstatus in op 'Approved' na Telegram commando.
+  triggers:
+  - event_type: telegram_command
+    event_data:
+      command: /kc_approve
+    trigger: event
+  conditions:
+  - condition: template
+    value_template: '{{ trigger.event.data.chat_id == 15473309 }}'
+  actions:
+  - variables:
+      reward_suffix: '{{ trigger.event.data.text.split(''_'')[-1] }}'
+      reward_entity_type: input_select
+      full_reward_entity: '{{ reward_entity_type }}.kc_yulian_reward_approval_{{ reward_suffix
+        }}'
+  - data:
+      entity_id: '{{ full_reward_entity }}'
+      option: Approved
+    action: input_select.select_option
+  - data:
+      target: '{{ trigger.event.data.chat_id }}'
+      message: ✅ Beloning goedgekeurd voor {{ reward_suffix }}. De status is nu 'Approved'.
+    action: telegram_bot.send_message
+  mode: single
+- id: '1761317536616'
+  alias: KC Ouder - Verwerk Beloning Afkeuring
+  description: Stelt de beloningsstatus in op 'Available' na Telegram commando.
+  triggers:
+  - event_type: telegram_command
+    event_data:
+      command: /kc_disapprove
+    trigger: event
+  conditions:
+  - condition: template
+    value_template: '{{ trigger.event.data.chat_id == 15473309 }}'
+  actions:
+  - variables:
+      reward_suffix: '{{ trigger.event.data.text.split(''_'')[-1] }}'
+      reward_entity_type: input_select
+      full_reward_entity: '{{ reward_entity_type }}.kc_yulian_reward_approval_{{ reward_suffix
+        }}'
+  - data:
+      entity_id: '{{ full_reward_entity }}'
+      option: Available
+    action: input_select.select_option
+  - data:
+      target: '{{ trigger.event.data.chat_id }}'
+      message: ❌ Beloning afgekeurd voor {{ reward_suffix }}. Yulian kan deze opnieuw
+        claimen.
+    action: telegram_bot.send_message
+  mode: single
+- id: '1761495262100'
+  alias: Eten klaar
+  description: ''
+  triggers: []
+  conditions: []
+  actions:
+  - action: tts.speak
+    metadata: {}
+    data:
+      cache: true
+      media_player_entity_id: media_player.begane_grond_2
+      message: Het eten is klaar, direct beneden komen om te eten, als je te laat
+        bent kan je naar bed
+    target:
+      device_id: ae4f80b8aade1f304ae2d88f2f17404b
+  mode: single
+- id: '1761590025747'
+  alias: Tag Scan - Dynamische Gebruikersnaam TTS
+  description: Leest de naam van de gebruiker die een specifieke tag scant en stuurt
+    Telegram bericht.
+  triggers:
+  - event_type: tag_scanned
+    event_data:
+      tag_id: 8f763d16-01f9-4eac-b289-3f55b8d59ef9
+    trigger: event
+  actions:
+  - variables:
+      user_id: '{{ trigger.event.context.user_id }}'
+      user_entity: '{% set user_name = user_id | default(''onbekende_gebruiker'',
+        true) | replace(''-'', ''_'') %} {{ states.person | selectattr(''attributes.user_id'',
+        ''eq'', user_id) | map(attribute=''entity_id'') | first }}
+
+        '
+      fallback_name: '{{ states.user | selectattr(''id'', ''eq'', user_id) | map(attribute=''attributes.friendly_name'')
+        | first }}'
+      friendly_user_name: "{% if user_entity %}\n  {{ state_attr(user_entity, 'friendly_name')
+        }}\n{% elif fallback_name %}\n  {{ fallback_name }}\n{% else %}\n  iemand\n{%
+        endif %}\n"
+  - action: telegram_bot.send_message
+    data:
+      target: "{# Controleert de labels van de huidige automatisering #}  {% if 'test'
+        in labels(this.entity_id) | default([], true) %}\n  {{ states('input_text.telegram_chatid_test')
+        }}\n{% else %}\n  {{ states('input_text.telegram_chatid_family') }}\n{% endif
+        %}\n"
+      message: "Tag gescand door {{ friendly_user_name }}.\n{% set automation_labels
+        = labels(this.entity_id) | default([], true) %} {% if automation_labels |
+        length > 0 %}\n  Labels: {{ automation_labels | join(', ') }}\n{% else %}\n
+        \ Labels: Geen (Productiemodus)\n{% endif %}    \n"
+  - action: tts.speak
+    metadata: {}
+    data:
+      cache: true
+      message: Welterusten {{ friendly_user_name }}, slaap lekker en tot morgen!
+      media_player_entity_id: media_player.begane_grond_2
+    target:
+      device_id: ae4f80b8aade1f304ae2d88f2f17404b
+  mode: single
+- id: '1761596815074'
+  alias: Nieuwe automatisering TAG
+  description: Leest de naam van de gebruiker die een specifieke tag scant en stuurt
+    Telegram bericht.
+  triggers:
+  - event_type: tag_scanned
+    event_data:
+      tag_id: 8f763d16-01f9-4eac-b289-3f55b8d59ef9
+    trigger: event
+  conditions: []
+  actions:
+  - variables:
+      user_id: '{{ trigger.event.context.user_id }}'
+      user_entity: '{% set user_name = user_id | default(''onbekende_gebruiker'',
+        true) | replace(''-'', ''_'') %} {{ states.person | selectattr(''attributes.user_id'',
+        ''eq'', user_id) | map(attribute=''entity_id'') | first }}
+
+        '
+      fallback_name: '{{ states.user | selectattr(''id'', ''eq'', user_id) | map(attribute=''attributes.friendly_name'')
+        | first }}'
+      friendly_user_name: "{% if user_entity %}\n  {{ state_attr(user_entity, 'friendly_name')
+        }}\n{% elif fallback_name %}\n  {{ fallback_name }}\n{% else %}\n  iemand\n{%
+        endif %}\n"
+  - data:
+      message_text: "\U0001F7E2 Tag 'Test wit' succesvol gescand door {{ friendly_user_name
+        }}."
+      user_name: '{{ friendly_user_name }}'
+    action: script.send_telegram_message
+  - action: tts.speak
+    data:
+      media_player_entity_id: media_player.keuken
+      message: Welterusten {{ friendly_user_name }}, slaap lekker en tot morgen!
+    target:
+      entity_id: media_player.keuken
+  mode: single
+- id: '1761820155247'
+  alias: Wijzig Energietarief
+  description: Stelt de helpers voor gas en stroom (hoog/laag) in op basis van de
+    geplande tariefperiodes en correcte belasting (alles excl. BTW).
+  triggers:
+  - at: 00:05:00
+    trigger: time
+    enabled: true
+  conditions: []
+  actions:
+  - variables:
+      btw_factor: 1.21
+      basisprijs_gas: 0.5095
+      korting_2024: 0.25
+      korting_2025: 0.35
+      belasting_gas_2024_ex: 0.54013
+      belasting_gas_2025_ex: 0.5781
+      belasting_gas_2026_ex: 0.60058
+      basisprijs_stroom_laag: 0.1189
+      basisprijs_stroom_hoog: 0.1315
+      belasting_stroom_2024_ex: 0.1088
+      belasting_stroom_2025_ex: 0.10154
+      belasting_stroom_2026_ex: 0.09157
+      korting_perc: "{% set korting = korting_2024 %}  {% if now().date() >= (strptime('2025-11-01',
+        '%Y-%m-%d').date()) %}\n  {% set korting = korting_2025 %}\n{% endif %}  {{
+        korting }}\n"
+      energiebelasting_gas: "{% set belasting = belasting_gas_2024_ex %}  {% if now().date()
+        >= (strptime('2026-01-01', '%Y-%m-%d').date()) %}\n  {% set belasting = belasting_gas_2026_ex
+        %}\n{% elif now().date() >= (strptime('2025-01-01', '%Y-%m-%d').date()) %}\n
+        \ {% set belasting = belasting_gas_2025_ex %}\n{% endif %}  {{ belasting }}\n"
+      energiebelasting_stroom: "{% set belasting = belasting_stroom_2024_ex %}  {%
+        if now().date() >= (strptime('2025-01-01', '%Y-%m-%d').date()) %}\n  {% set
+        belasting = belasting_stroom_2025_ex %}\n{% endif %}  {{ belasting }}\n"
+  - target:
+      entity_id: input_number.gas_tarief
+    data:
+      value: '{% set prijs_na_korting_ex_btw = basisprijs_gas * (1 - korting_perc
+        | float) %} {% set prijs_voor_btw = prijs_na_korting_ex_btw + energiebelasting_gas
+        | float %} {% set eindprijs = prijs_voor_btw * btw_factor %} {{ eindprijs
+        | round(5) }}
+
+        '
+    action: input_number.set_value
+  - target:
+      entity_id: input_number.kwh_tarief_laag
+    data:
+      value: '{% set prijs_na_korting_ex_btw = basisprijs_stroom_laag * (1 - korting_perc
+        | float) %} {% set prijs_voor_btw = prijs_na_korting_ex_btw + energiebelasting_stroom
+        | float %} {% set eindprijs = prijs_voor_btw * btw_factor %} {{ eindprijs
+        | round(5) }}
+
+        '
+    action: input_number.set_value
+  - target:
+      entity_id: input_number.kwh_tarief_hoog
+    data:
+      value: '{% set prijs_na_korting_ex_btw = basisprijs_stroom_hoog * (1 - korting_perc
+        | float) %} {% set prijs_voor_btw = prijs_na_korting_ex_btw + energiebelasting_stroom
+        | float %} {% set eindprijs = prijs_voor_btw * btw_factor %} {{ eindprijs
+        | round(5) }}
+
+        '
+    action: input_number.set_value
+- id: '1761990153065'
+  alias: Wasmachine
+  description: ''
+  triggers:
+  - type: power
+    device_id: 0159c4f4eb00ecf043dddfb711c322df
+    entity_id: 065321b2419d8d8334ddd22c0b2fd893
+    domain: sensor
+    trigger: device
+    above: 5
+    for:
+      hours: 0
+      minutes: 1
+      seconds: 0
+  conditions: []
+  actions:
+  - action: notify.mobile_app_telefoon_jeroen
+    metadata: {}
+    data:
+      message: Wasmachine aan gezet
+  - wait_for_trigger:
+    - type: power
+      device_id: 0159c4f4eb00ecf043dddfb711c322df
+      entity_id: 065321b2419d8d8334ddd22c0b2fd893
+      domain: sensor
+      trigger: device
+      below: 0.1
+      for:
+        hours: 0
+        minutes: 2
+        seconds: 0
+  - action: notify.mobile_app_telefoon_jeroen
+    metadata: {}
+    data:
+      message: Wasmachine is klaar
+  - action: notify.mobile_app_linda_a54
+    metadata: {}
+    data:
+      message: Wasmachine is klaar
+  mode: single
+- id: eetkamer_licht_thuiskomst
+  alias: Eetkamer Licht aan bij Donkere Thuiskomst
+  description: Schakelt Lamp Eettafel 3 aan als het donker is en er één persoon thuis
+    komt.
+  triggers:
+  - entity_id: group.all_persons
+    from: not_home
+    to: home
+    trigger: state
+  - entity_id: sensor.aantal_personen_thuis
+    from: '3'
+    to: '4'
+    trigger: state
+  conditions:
+  - condition: state
+    entity_id: sun.sun
+    state: below_horizon
+  - condition: numeric_state
+    entity_id: sensor.aantal_personen_thuis
+    above: 0
+    below: 2
+  actions:
+  - target:
+      entity_id: light.lamp_eettafel_3
+    action: homeassistant.turn_on
+  mode: single
+- id: eetkamer_licht_thuiskomst
+  alias: Eetkamer Licht aan bij Donkere Thuiskomst
+  description: Schakelt Lamp Eettafel 3 aan als het donker is en er één persoon thuis
+    komt.
+  triggers:
+  - entity_id: group.all_persons
+    from: not_home
+    to: home
+    trigger: state
+  - entity_id: sensor.aantal_personen_thuis
+    from: '3'
+    to: '4'
+    trigger: state
+  conditions:
+  - condition: state
+    entity_id: sun.sun
+    state: below_horizon
+  - condition: numeric_state
+    entity_id: sensor.aantal_personen_thuis
+    above: 0
+    below: 4
+  actions:
+  - target:
+      entity_id: light.lamp_eettafel_3
+    action: homeassistant.turn_on
+  mode: single
+- id: eetkamer_licht_thuiskomst
+  alias: Eetkamer Licht aan bij Donkere Thuiskomst
+  description: Schakelt Lamp Eettafel 3 aan als het donker is en er één persoon thuis
+    komt.
+  triggers:
+  - entity_id: group.all_persons
+    from: not_home
+    to: home
+    trigger: state
+  - entity_id: sensor.aantal_personen_thuis
+    from: '0'
+    to: '1'
+    trigger: state
+  conditions:
+  - condition: state
+    entity_id: sun.sun
+    state: below_horizon
+  - condition: numeric_state
+    entity_id: sensor.aantal_personen_thuis
+    above: 0
+    below: 2
+  actions:
+  - target:
+      entity_id: light.lamp_eettafel_3
+    action: homeassistant.turn_on
+  mode: single
+- id: '1763327431528'
+  alias: Verwarming serre uit
+  description: ''
+  triggers:
+  - type: changed_states
+    device_id: 7d4536a00278723db86066d6af14f32b
+    entity_id: 36c874da09beed3cbbd3362ecc496b91
+    domain: light
+    trigger: device
+  conditions:
+  - condition: device
+    device_id: ae7e5b688e5d9987b8ad3af8be889a66
+    domain: climate
+    entity_id: a1fe468447b87fe420ce8b9858c5952f
+    type: is_hvac_mode
+    hvac_mode: heat
+  actions:
+  - device_id: ae7e5b688e5d9987b8ad3af8be889a66
+    domain: climate
+    entity_id: a1fe468447b87fe420ce8b9858c5952f
+    type: set_hvac_mode
+    hvac_mode: 'off'
+  mode: single
+- id: '1766173677300'
+  alias: 'Systeem: Melding IP wijziging naar Telegram'
+  description: Stuurt het nieuwe IP adres naar de ThuisApp groep
+  triggers:
+  - entity_id: sensor.myip
+    trigger: state
+  conditions:
+  - condition: template
+    value_template: "{{ trigger is not none and \n   trigger.from_state is not none
+      and \n   trigger.to_state is not none and\n   trigger.to_state.state not in
+      ['unknown', 'unavailable'] }}\n"
+  actions:
+  - data:
+      title: "\U0001F310 *IP Adres Update*"
+      message: "{% if trigger is not none and trigger.to_state is not none %}\n  Het
+        externe IP-adres is gewijzigd.\n  \n  *Nieuw IP:* `{{ trigger.to_state.state
+        }}`\n  *Vorig IP:* `{{ trigger.from_state.state }}`\n{% else %}\n  Handmatige
+        test van de IP-melding.\n  \n  *Huidig IP:* `{{ states('sensor.myip') }}`\n{%
+        endif %}\n"
+      data:
+        parse_mode: markdown
+    action: notify.telegram_thuisapp
+  mode: single
+- id: '1766343745168'
+  alias: Bedverwarming uit
+  description: ''
+  triggers:
+  - trigger: time
+    at: '23:00:00'
+    weekday:
+    - sun
+    - sat
+    - fri
+    - thu
+    - wed
+    - tue
+    - mon
+  conditions:
+  - condition: device
+    type: is_on
+    device_id: 74bde970801a33bb48933be45063fddb
+    entity_id: 50ee8fe14033d1cea1aaa869554c9b49
+    domain: switch
+  actions:
+  - type: turn_off
+    device_id: 74bde970801a33bb48933be45063fddb
+    entity_id: 50ee8fe14033d1cea1aaa869554c9b49
+    domain: switch
+  mode: single
+- id: '1766398117160'
+  alias: Bedverwarming aan
+  description: ''
+  triggers:
+  - trigger: time
+    at: '19:30:00'
+    weekday:
+    - sun
+    - sat
+    - fri
+    - thu
+    - wed
+    - tue
+    - mon
+  conditions:
+  - condition: numeric_state
+    entity_id: weather.forecast_thuis
+    attribute: temperature
+    below: 6
+  actions:
+  - type: turn_on
+    device_id: 74bde970801a33bb48933be45063fddb
+    entity_id: 50ee8fe14033d1cea1aaa869554c9b49
+    domain: switch
+  mode: single

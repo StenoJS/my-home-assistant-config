@@ -1,0 +1,35 @@
+# --- Home Assistant Bestanden ---
+# Database (grootste boosdoener voor de 100MB limiet)
+*.db
+*.db-shm
+*.db-wal
+
+# Logboeken
+*.log
+*.log.1
+*.log.fault
+
+# --- Gecomprimeerde bestanden & Backups ---
+*.zip
+*.gz
+*.tar
+*.tar.gz
+backups/
+export/
+
+# --- Privacy & Veiligheid ---
+# Hier staan je wachtwoorden in. NOOIT uploaden.
+secrets.yaml
+
+# Interne opslag van HA (bevat tokens, device ID's en auth data)
+.storage/
+.cloud/
+.google_auth
+
+# --- OS & Editor specifiek ---
+.DS_Store
+__pycache__/
+*.pyc
+*.pyo
+.vscode/
+.ssh/

@@ -1,0 +1,82 @@
+template:
+  - trigger:
+      - trigger: state
+        entity_id: sensor.date
+      - trigger: time
+        at: "12:00:00"
+      - trigger: state
+        entity_id:
+          - sensor.ical_magister_event_0
+          - sensor.ical_magister_event_1
+          - sensor.ical_magister_event_2
+          - sensor.ical_magister_event_3
+          - sensor.ical_magister_event_4
+          - sensor.ical_magister_event_5
+          - sensor.ical_magister_event_6
+          - sensor.ical_magister_event_7
+          - sensor.ical_magister_event_8
+          - sensor.ical_magister_event_9
+          - sensor.ical_magister_event_10
+          - sensor.ical_magister_event_11
+          - sensor.ical_magister_event_12
+          - sensor.ical_magister_event_13
+          - sensor.ical_magister_event_14
+          - sensor.ical_magister_event_15
+          - sensor.ical_magister_event_16
+          - sensor.ical_magister_event_17
+          - sensor.ical_magister_event_18
+          - sensor.ical_magister_event_19
+          - sensor.ical_magister_event_20
+          - sensor.ical_magister_event_21
+          - sensor.ical_magister_event_22
+          - sensor.ical_magister_event_23
+          - sensor.ical_magister_event_24
+          - sensor.ical_magister_event_25
+          - sensor.ical_magister_event_26
+          - sensor.ical_magister_event_27
+          - sensor.ical_magister_event_28
+          - sensor.ical_magister_event_29
+          - sensor.ical_magister_event_30
+          - sensor.ical_magister_event_31
+          - sensor.ical_magister_event_32
+          - sensor.ical_magister_event_33
+          - sensor.ical_magister_event_34
+          - sensor.ical_magister_event_35
+          - sensor.ical_magister_event_36
+          - sensor.ical_magister_event_37
+          - sensor.ical_magister_event_38
+          - sensor.ical_magister_event_39
+          - sensor.ical_magister_event_40
+          - sensor.ical_magister_event_41
+          - sensor.ical_magister_event_42
+          - sensor.ical_magister_event_43
+          - sensor.ical_magister_event_44
+          - sensor.ical_magister_event_45
+          - sensor.ical_magister_event_46
+          - sensor.ical_magister_event_47
+          - sensor.ical_magister_event_48
+          - sensor.ical_magister_event_49
+    sensor:
+      - name: "Nextup lesson Magister"
+        unique_id: nextup_lesson_magister
+        state: >-
+          {% if now().hour < 12 %}
+          {% set x = states.sensor
+            | selectattr('object_id', 'match', 'ical_magister')
+            | selectattr('attributes.start', 'defined') 
+            | rejectattr('attributes.location', 'in', ('','verborgen'))
+            | rejectattr('attributes.all_day', 'eq', true)
+            | sort(attribute='attributes.start')
+            | map(attribute='attributes.start') | list %}
+          {{ x|first if x != [] else '' }}
+          {% else %}
+          {% set x = states.sensor
+            | selectattr('object_id', 'match', 'ical_magister')
+            | selectattr('attributes.start', 'defined') 
+            | rejectattr('attributes.start', 'search', as_timestamp(now()) | timestamp_custom ('%Y-%m-%d') )
+            | rejectattr('attributes.location', 'in', ('','verborgen'))
+            | rejectattr('attributes.all_day', 'eq', true)
+            | sort(attribute='attributes.start')
+            | map(attribute='attributes.start') | list %}
+          {{ x|first if x != [] else '' }}
+          {% endif %}
