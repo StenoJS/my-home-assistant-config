@@ -30,7 +30,7 @@ het_eten_is_klaar:
   icon: mdi:food
 send_telegram_message:
   alias: Send Smart Telegram Message
-  description: Routes messages to Test or Family chat based on labels. Debug info is hidden in Production.
+  description: Routes messages to the correct Notify Entity based on labels.
   fields:
     message_text:
       description: The message content.
@@ -43,33 +43,29 @@ send_telegram_message:
       selector:
         entity:
   sequence:
-  - variables:
-      # Get labels for the calling entity
-      labels_list: "{{ labels(caller_id) | default([], true) }}"
-      is_test_mode: "{{ 'test' in labels_list }}"
-      
-      # Determine Target Chat
-      target_chat: >
-        {% if is_test_mode %}
-          {{ states('input_text.telegram_chatid_test') }}
-        {% else %}
-          {{ states('input_text.telegram_chatid_family') }}
-        {% endif %}
-
-      # Construct Message: Only add debug info if in Test Mode
-      final_message: >
-        {{ message_text }}
-        {% if is_test_mode %}
-        
-        --- 🛠 DEBUG INFO ---
-        Caller: {{ caller_id }}
-        Mode: TEST
-        Labels: {{ labels_list | join(', ') }}
-        {% endif %}
-
-  - action: telegram_bot.send_message
-    data:
-      target: "{{ target_chat }}"
-      message: "{{ final_message }}"
-      # Optional: Add parse_mode if you use Markdown/HTML often
-      parse_mode: markdown
+    - variables:
+        labels_list: "{{ labels(caller_id) | default([], true) }}"
+        is_test_mode: "{{ 'test' in labels_list }}"
+        # Define which entity to use
+        target_entity: >
+          {% if is_test_mode %}
+            notify.telegram_bot_8053303995_15473309
+          {% else %}
+            notify.telegram_thuisapp
+          {% endif %}
+        # Clean message construction
+        final_message: >
+          {{ message_text }}
+          {% if is_test_mode %}
+          
+          --- 🛠 DEBUG INFO ---
+          Caller: {{ caller_id }}
+          Labels: {{ labels_list | join(', ') }}
+          {% endif %}
+    
+    # THE NEW MODERN ACTION
+    - action: notify.send_message
+      target:
+        entity_id: "{{ target_entity }}"
+      data:
+        message: "{{ final_message }}"
