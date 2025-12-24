@@ -94,8 +94,8 @@
   actions:
   - action: script.send_telegram_message
     data:
-      message_text: "😴 Linda gaat slapen. Welterusten!"
-      caller_id: "{{ this.entity_id }}"
+      message_text: "\U0001F634 Linda gaat slapen. Welterusten!"
+      caller_id: '{{ this.entity_id }}'
       disable_notification: true
   - action: light.turn_off
     metadata: {}
@@ -390,8 +390,8 @@
       device_id: ae4f80b8aade1f304ae2d88f2f17404b
   - action: script.send_telegram_message
     data:
-      message_text: "🧺 De droger is klaar!"
-      caller_id: "{{ this.entity_id }}"
+      message_text: "\U0001F9FA De droger is klaar!"
+      caller_id: '{{ this.entity_id }}'
   mode: single
 - id: '1760389566643'
   alias: Jeroen muziek slapen
@@ -931,26 +931,22 @@
   mode: single
 - id: '1766173677300'
   alias: 'Systeem: Melding IP wijziging naar Telegram'
-  description: Stuurt het nieuwe IP adres naar de ThuisApp groep
-  triggers:
-  - entity_id: sensor.myip
-    trigger: state
-  conditions:
+  description: Stuurt het nieuwe IP adres naar de juiste chat op basis van labels
+  trigger:
+  - platform: state
+    entity_id: sensor.myip
+  condition:
   - condition: template
-    value_template: "{{ trigger is not none and \n   trigger.from_state is not none
-      and \n   trigger.to_state is not none and\n   trigger.to_state.state not in
-      ['unknown', 'unavailable'] }}\n"
-  actions:
-  - data:
-      title: "\U0001F310 *IP Adres Update*"
-      message: "{% if trigger is not none and trigger.to_state is not none %}\n  Het
-        externe IP-adres is gewijzigd.\n  \n  *Nieuw IP:* `{{ trigger.to_state.state
-        }}`\n  *Vorig IP:* `{{ trigger.from_state.state }}`\n{% else %}\n  Handmatige
-        test van de IP-melding.\n  \n  *Huidig IP:* `{{ states('sensor.myip') }}`\n{%
-        endif %}\n"
-      data:
-        parse_mode: markdown
-    action: notify.telegram_thuisapp
+    value_template: "{{ trigger.from_state is not none and \n   trigger.to_state is
+      not none and \n   trigger.from_state.state not in ['unknown', 'unavailable']
+      and\n   trigger.to_state.state not in ['unknown', 'unavailable'] and\n   trigger.from_state.state
+      != trigger.to_state.state }}\n"
+  action:
+  - action: script.telegram_message_familyapp
+    data:
+      caller_id: '{{ this.entity_id }}'
+      message_text: "\U0001F310 *IP Adres Update* Nieuw IP: {{ trigger.to_state.state
+        }} Vorig IP: {{ trigger.from_state.state }}\n"
   mode: single
 - id: '1766343745168'
   alias: Bedverwarming uit
@@ -986,7 +982,6 @@
     at: '19:30:00'
     weekday:
     - sun
-    - sat
     - fri
     - thu
     - wed
@@ -1002,4 +997,9 @@
     device_id: 74bde970801a33bb48933be45063fddb
     entity_id: 50ee8fe14033d1cea1aaa869554c9b49
     domain: switch
+  - action: notify.telegram_family
+    metadata: {}
+    data:
+      message: Bedverwarming Yulian aangezet
+      title: "\U0001F6CC\U0001F3FC Bedverwarming"
   mode: single

@@ -1,0 +1,261 @@
+#################################################################
+# Package: Google Family Link Integratie
+# Beschrijving: Beheer van schermtijd, verzoeken en statistieken
+# Auteur: Jeroen & Home Assistant Architect
+#################################################################
+
+automation:
+  # ----------------------------------------------------------------
+  # 1. INTERACTIEF TIJD VERZOEK (Telegram)
+  # ----------------------------------------------------------------
+  - id: family_link_interactive_flow
+    alias: "Family Link: Interactief Tijd Verzoek"
+    description: "Handelt verzoeken om extra schermtijd af via interactieve Telegram knoppen."
+    mode: parallel
+    
+    variables:
+      id_mika: !secret telegram_id_mika
+      id_yulian: !secret telegram_id_yulian
+      id_parents: !secret telegram_parents
+      id_family: !secret telegram_chat_id_family
+      approver_name: "{{ trigger.event.data.from_first_name | default('een ouder', true) }}"
+
+    trigger:
+      - platform: event
+        event_type: telegram_command
+        event_data:
+          command: "/tijd"
+        id: "start_request"
+      - platform: event
+        event_type: telegram_text
+        id: "start_request"
+      - platform: event
+        event_type: telegram_callback
+        id: "callback"
+
+    action:
+      - choose:
+          # --- STAP 1: Vraag welk apparaat ---
+          - conditions:
+              - condition: trigger
+                id: "start_request"
+              # Check: Bericht in de Family Groep (via variabele)
+              - condition: template
+                value_template: "{{ trigger.event.data.chat_id == id_family }}"
+              - condition: or
+                conditions:
+                  - condition: template
+                    value_template: "{{ trigger.event.event_type == 'telegram_command' }}"
+                  - condition: template
+                    value_template: >
+                      {{ trigger.event.event_type == 'telegram_text' and 
+                         ('tijd' in trigger.event.data.text | lower or 'minuten' in trigger.event.data.text | lower) }}
+            sequence:
+              - choose:
+                  # Mika
+                  - conditions:
+                      - condition: template
+                        value_template: "{{ trigger.event.data.user_id == id_mika }}"
+                    sequence:
+                      - action: telegram_bot.send_message
+                        data:
+                          target: !secret telegram_chat_id_family
+                          message: "Mika, voor welk apparaat wil je tijd?"
+                          inline_keyboard:
+                            - "📱 Mijn Telefoon:/dev:m_p, 📟 Mijn Tablet:/dev:m_t"
+                            - "Annuleren ❌:/cancel"
+                  # Yulian
+                  - conditions:
+                      - condition: template
+                        value_template: "{{ trigger.event.data.user_id == id_yulian }}"
+                    sequence:
+                      - action: telegram_bot.send_message
+                        data:
+                          target: !secret telegram_chat_id_family
+                          message: "Yulian, voor welk apparaat wil je tijd?"
+                          inline_keyboard:
+                            - "📱 Mijn Telefoon:/dev:y_p, 📟 Mijn Tablet:/dev:y_t"
+                            - "Annuleren ❌:/cancel"
+                default:
+                  - action: telegram_bot.send_message
+                    data:
+                      target: !secret telegram_chat_id_family
+                      message: "Voor wie en welk apparaat is de extra tijd?"
+                      inline_keyboard:
+                        - "📱 Mika Telefoon:/dev:m_p, 📱 Yulian Telefoon:/dev:y_p"
+                        - "📟 Mika Tablet:/dev:m_t, 📟 Yulian Tablet:/dev:y_t"
+                        - "Annuleren ❌:/cancel"
+
+          # --- STAP 2: Apparaat gekozen ---
+          - conditions:
+              - condition: trigger
+                id: "callback"
+              - condition: template
+                value_template: "{{ trigger.event.data.data.startswith('/dev:') }}"
+            sequence:
+              - variables:
+                  code: "{{ trigger.event.data.data.split(':')[1] }}"
+                  device_name: >
+                    {% if code == 'm_p' %}Mika's Telefoon
+                    {% elif code == 'm_t' %}Mika's Tablet
+                    {% elif code == 'y_p' %}Yulian's Telefoon
+                    {% elif code == 'y_t' %}Yulian's Tablet
+                    {% endif %}
+              - action: telegram_bot.edit_message
+                data:
+                  message_id: "{{ trigger.event.data.message.message_id }}"
+                  chat_id: "{{ trigger.event.data.message.chat.id }}"
+                  message: "Verzoek voor **{{ device_name }}**.\nOuders, hoeveel tijd keuren jullie goed?"
+                  inline_keyboard:
+                    - "15m:/add:{{code}}:15, 30m:/add:{{code}}:30, 1u:/add:{{code}}:60"
+                    - "Afwijzen ❌:/cancel"
+              - action: telegram_bot.answer_callback_query
+                data:
+                  callback_query_id: "{{ trigger.event.data.id }}"
+                  message: "Keuze doorgegeven aan ouders."
+
+          # --- STAP 3: Tijd Goedkeuren ---
+          - conditions:
+              - condition: trigger
+                id: "callback"
+              - condition: template
+                value_template: "{{ trigger.event.data.data.startswith('/add:') }}"
+            sequence:
+              - if:
+                  - condition: template
+                    value_template: "{{ trigger.event.data.user_id | int in id_parents }}" 
+                then:
+                  - variables:
+                      code: "{{ trigger.event.data.data.split(':')[1] }}"
+                      minutes: "{{ trigger.event.data.data.split(':')[2] | int }}"
+                      target_entity: >
+                        {% if code == 'm_p' %}switch.sm_a176b
+                        {% elif code == 'm_t' %}switch.lenovo_tb_x606f_van_mika
+                        {% elif code == 'y_p' %}switch.sm_a145r
+                        {% elif code == 'y_t' %}switch.tablet_yulian
+                        {% endif %}
+                      device_display: >
+                        {% if code == 'm_p' %}Mika's Telefoon
+                        {% elif code == 'm_t' %}Mika's Tablet
+                        {% elif code == 'y_p' %}Yulian's Telefoon
+                        {% elif code == 'y_t' %}Yulian's Tablet
+                        {% endif %}
+                  
+                  - action: familylink.add_time_bonus
+                    data:
+                      entity_id: "{{ target_entity }}"
+                      bonus_minutes: "{{ minutes }}"
+                  
+                  - action: telegram_bot.edit_message
+                    data:
+                      message_id: "{{ trigger.event.data.message.message_id }}"
+                      chat_id: "{{ trigger.event.data.message.chat.id }}"
+                      message: "✅ **Goedgekeurd door {{ approver_name }}!**\nEr is {{ minutes }} minuten toegevoegd aan {{ device_display }}."
+                      inline_keyboard: []
+                  - action: telegram_bot.answer_callback_query
+                    data:
+                      callback_query_id: "{{ trigger.event.data.id }}"
+                      message: "Tijd succesvol toegevoegd!"
+                else:
+                  - action: telegram_bot.answer_callback_query
+                    data:
+                      callback_query_id: "{{ trigger.event.data.id }}"
+                      message: "⛔ Alleen papa of mama mogen dit goedkeuren!"
+                      show_alert: true
+
+          # --- STAP 4: Annuleren ---
+          - conditions:
+              - condition: trigger
+                id: "callback"
+              - condition: template
+                value_template: "{{ trigger.event.data.data == '/cancel' }}"
+            sequence:
+               - action: telegram_bot.delete_message
+                 data:
+                   message_id: "{{ trigger.event.data.message.message_id }}"
+                   chat_id: "{{ trigger.event.data.message.chat.id }}"
+
+  # ----------------------------------------------------------------
+  # 2. ETENSTIJD KNOP (Alles blokkeren/vrijgeven)
+  # ----------------------------------------------------------------
+  - id: family_link_dinner_time
+    alias: "Family Link: Etenstijd Modus"
+    variables:
+      id_parents: !secret telegram_parents
+      
+    trigger:
+      - platform: event
+        event_type: telegram_command
+        event_data:
+          command: "/eten"
+        id: "lock"
+      - platform: event
+        event_type: telegram_command
+        event_data:
+          command: "/klaar"
+        id: "unlock"
+    
+    condition:
+      - condition: template
+        value_template: "{{ trigger.event.data.user_id | int in id_parents }}"
+        
+    action:
+      - choose:
+          # --- LOCK ---
+          - conditions:
+              - condition: trigger
+                id: "lock"
+            sequence:
+              - action: switch.turn_on
+                target:
+                  entity_id: 
+                    - switch.sm_a176b
+                    - switch.lenovo_tb_x606f_van_mika
+                    - switch.sm_a145r
+                    - switch.tablet_yulian
+              - action: telegram_bot.send_message
+                data:
+                  target: !secret telegram_chat_id_family
+                  message: "🍽️ **Etenstijd!** Alle apparaten zijn gepauzeerd. Aan tafel!"
+
+          # --- UNLOCK ---
+          - conditions:
+              - condition: trigger
+                id: "unlock"
+            sequence:
+              - action: switch.turn_off
+                target:
+                  entity_id: 
+                    - switch.sm_a176b
+                    - switch.lenovo_tb_x606f_van_mika
+                    - switch.sm_a145r
+                    - switch.tablet_yulian
+              - action: telegram_bot.send_message
+                data:
+                  target: !secret telegram_chat_id_family
+                  message: "✅ Apparaten zijn weer vrijgegeven. Smakelijk gehad!"
+
+  # ----------------------------------------------------------------
+  # 3. DAGELIJKS OVERZICHT (Statistieken)
+  # ----------------------------------------------------------------
+  - id: family_link_daily_stats
+    alias: "Family Link: Dagelijks Overzicht"
+    trigger:
+      - platform: time
+        at: "21:00:00"
+    action:
+      - action: telegram_bot.send_message
+        data:
+          target: !secret telegram_chat_id_family
+          message: >
+            📊 **Schermtijd Vandaag**
+            
+            **Mika (Totaal: {{ states('sensor.mika_steenhagen_screen_time_formatted') }})**
+            1. {{ state_attr('sensor.mika_steenhagen_top_app_1', 'app_name') }}: {{ states('sensor.mika_steenhagen_top_app_1') | float | round(0) }} min
+            2. {{ state_attr('sensor.mika_steenhagen_top_app_2', 'app_name') }}: {{ states('sensor.mika_steenhagen_top_app_2') | float | round(0) }} min
+            3. {{ state_attr('sensor.mika_steenhagen_top_app_3', 'app_name') }}: {{ states('sensor.mika_steenhagen_top_app_3') | float | round(0) }} min
+            
+            **Yulian (Totaal: {{ states('sensor.yulian_steenhagen_screen_time_formatted') }})**
+            1. {{ state_attr('sensor.yulian_steenhagen_top_app_1', 'app_name') }}: {{ states('sensor.yulian_steenhagen_top_app_1') | float | round(0) }} min
+            2. {{ state_attr('sensor.yulian_steenhagen_top_app_2', 'app_name') }}: {{ states('sensor.yulian_steenhagen_top_app_2') | float | round(0) }} min
+            3. {{ state_attr('sensor.yulian_steenhagen_top_app_3', 'app_name') }}: {{ states('sensor.yulian_steenhagen_top_app_3') | float | round(0) }} min

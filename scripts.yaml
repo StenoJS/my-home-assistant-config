@@ -28,44 +28,35 @@ het_eten_is_klaar:
   alias: Het eten is klaar
   description: ''
   icon: mdi:food
-send_telegram_message:
-  alias: Send Smart Telegram Message
-  description: Routes messages to the correct Notify Entity based on labels.
+telegram_message_familyapp:
+  alias: "Centrale Telegram Router"
+  description: "Stuurt berichten naar de Test- of Familie-chat op basis van labels."
   fields:
     message_text:
-      description: The message content.
+      description: "De tekst van het bericht"
+      example: "De wasmachine is klaar"
       required: true
-      selector:
-        text:
     caller_id:
-      description: Entity ID of the caller (for label checking).
+      description: "ID van de aanroepende automatisering (gebruik {{ this.entity_id }})"
+      example: "automation.ip_check"
       required: true
-      selector:
-        entity:
   sequence:
     - variables:
-        labels_list: "{{ labels(caller_id) | default([], true) }}"
-        is_test_mode: "{{ 'test' in labels_list }}"
-        # Define which entity to use
+        # Check of 'test' (hoofdletterongevoelig) in de labels staat
+        is_test: >
+          {{ 'test' in labels(caller_id) | map('lower') | list if caller_id is defined else false }}
+        
+        # Bepaal de juiste notify entiteit
         target_entity: >
-          {% if is_test_mode %}
+          {% if is_test %}
             notify.telegram_bot_8053303995_15473309
           {% else %}
             notify.telegram_thuisapp
           {% endif %}
-        # Clean message construction
-        final_message: >
-          {{ message_text }}
-          {% if is_test_mode %}
-          
-          --- 🛠 DEBUG INFO ---
-          Caller: {{ caller_id }}
-          Labels: {{ labels_list | join(', ') }}
-          {% endif %}
-    
-    # THE NEW MODERN ACTION
+
+    # Voer de actie uit op de gekozen entiteit
     - action: notify.send_message
       target:
         entity_id: "{{ target_entity }}"
       data:
-        message: "{{ final_message }}"
+        message: "{{ message_text }}"
