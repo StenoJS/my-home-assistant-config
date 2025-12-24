@@ -13,11 +13,12 @@ scene: !include scenes.yaml
 
 # allowlist
 homeassistant:
+  packages: !include_dir_named packages
+  
   allowlist_external_dirs:
 #    - '/share/data'
     - "/media"
     - "/tmp"
-  packages: !include_dir_named packages
 
 http:
   use_x_forwarded_for: true
