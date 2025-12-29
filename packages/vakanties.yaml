@@ -1,0 +1,76 @@
+# Package: Schoolvakanties Nederland
+# Regio: NL-OV-OT (Overijssel / Twente)
+# Bron: OpenHolidaysAPI
+
+rest:
+  - scan_interval: 43200 # Update 2x per dag (elke 12 uur)
+    # Haalt dynamisch de data op van VANDAAG tot en met over 1 JAAR
+    resource_template: >
+      https://openholidaysapi.org/SchoolHolidays?countryIsoCode=NL&languageIsoCode=nl&validFrom={{ now().strftime('%Y-%m-%d') }}&validTo={{ (now() + timedelta(days=365)).strftime('%Y-%m-%d') }}&subdivisionCode=NL-OV-OT
+    sensor:
+      - name: "Schoolvakanties Data"
+        unique_id: school_holidays_data
+        # De state is het aantal gevonden vakanties, de data zit in de attributen
+        value_template: "{{ value_json | length }}"
+        json_attributes_path: "$"
+        json_attributes:
+          - "."
+
+template:
+  - binary_sensor:
+      - name: "Is Schoolvakantie"
+        unique_id: is_schoolvakantie
+        icon: mdi:school-off
+        state: >
+          {% set vandaag = now().date() %}
+          {% set data = state_attr('sensor.schoolvakanties_data', 'value_json') %}
+          {% set ns = namespace(is_vakantie=false) %}
+          
+          {% if data and data is iterable %}
+            {% for vakantie in data %}
+              {% set start = strptime(vakantie.startDate, '%Y-%m-%d').date() %}
+              {% set end = strptime(vakantie.endDate, '%Y-%m-%d').date() %}
+              {% if start <= vandaag <= end %}
+                {% set ns.is_vakantie = true %}
+              {% endif %}
+            {% endfor %}
+          {% endif %}
+          
+          {{ ns.is_vakantie }}
+          
+        attributes:
+          huidige_vakantie: >
+            {% set vandaag = now().date() %}
+            {% set data = state_attr('sensor.schoolvakanties_data', 'value_json') %}
+            {% set ns = namespace(naam="Geen") %}
+            
+            {% if data and data is iterable %}
+              {% for vakantie in data %}
+                {% set start = strptime(vakantie.startDate, '%Y-%m-%d').date() %}
+                {% set end = strptime(vakantie.endDate, '%Y-%m-%d').date() %}
+                {% if start <= vandaag <= end %}
+                  {# De naam is een lijst met vertalingen, we pakken de eerste (NL) #}
+                  {% set ns.naam = vakantie.name[0].text %}
+                {% endif %}
+              {% endfor %}
+            {% endif %}
+            {{ ns.naam }}
+            
+          komende_vakantie: >
+            {% set vandaag = now().date() %}
+            {% set data = state_attr('sensor.schoolvakanties_data', 'value_json') %}
+            {% set ns = namespace(volgende="Geen", dagen_tot=999) %}
+            
+            {% if data and data is iterable %}
+              {# Sorteer op startdatum om zeker te zijn dat we de eerstvolgende hebben #}
+              {% for vakantie in data | sort(attribute='startDate') %}
+                {% set start = strptime(vakantie.startDate, '%Y-%m-%d').date() %}
+                {% if start > vandaag %}
+                   {% if ns.volgende == "Geen" %}
+                      {% set ns.volgende = vakantie.name[0].text + ' (' + start.strftime('%d-%m') + ')' %}
+                      {% set ns.dagen_tot = (start - vandaag).days %}
+                   {% endif %}
+                {% endif %}
+              {% endfor %}
+            {% endif %}
+            {{ ns.volgende }}

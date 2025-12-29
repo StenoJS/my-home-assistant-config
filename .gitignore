@@ -20,6 +20,7 @@ export/
 # --- Privacy & Veiligheid ---
 # Hier staan je wachtwoorden in. NOOIT uploaden.
 secrets.yaml
+/custom_components/familylink/client/api.py
 
 # Interne opslag van HA (bevat tokens, device ID's en auth data)
 .storage/

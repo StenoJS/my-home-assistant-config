@@ -5,15 +5,13 @@
 #################################################################
 
 automation:
-  # ----------------------------------------------------------------
-  # 1. INTERACTIEF TIJD VERZOEK (Telegram)
-  # ----------------------------------------------------------------
   - id: family_link_interactive_flow
     alias: "Family Link: Interactief Tijd Verzoek"
-    description: "Handelt verzoeken om extra schermtijd af via interactieve Telegram knoppen."
+    description: "Geoptimaliseerde flow: Kind-keuze -> Device-keuze -> Tijd-keuze"
     mode: parallel
     
     variables:
+      # Gegevens uit je !secrets en bestaande configuratie
       id_mika: !secret telegram_id_mika
       id_yulian: !secret telegram_id_yulian
       id_parents: !secret telegram_parents
@@ -35,58 +33,74 @@ automation:
 
     action:
       - choose:
-          # --- STAP 1: Vraag welk apparaat ---
+          # --- STAP 1: Initiële trigger (Wie vraagt het?) ---
           - conditions:
               - condition: trigger
                 id: "start_request"
-              # Check: Bericht in de Family Groep (via variabele)
               - condition: template
                 value_template: "{{ trigger.event.data.chat_id == id_family }}"
-              - condition: or
-                conditions:
-                  - condition: template
-                    value_template: "{{ trigger.event.event_type == 'telegram_command' }}"
-                  - condition: template
-                    value_template: >
-                      {{ trigger.event.event_type == 'telegram_text' and 
-                         ('tijd' in trigger.event.data.text | lower or 'minuten' in trigger.event.data.text | lower) }}
+              - condition: template
+                value_template: >
+                  {{ trigger.event.event_type == 'telegram_command' or 
+                     ('tijd' in trigger.event.data.text | lower or 'minuten' in trigger.event.data.text | lower) }}
             sequence:
               - choose:
-                  # Mika
+                  # Als Mika het vraagt -> Direct naar zijn devices
                   - conditions:
                       - condition: template
                         value_template: "{{ trigger.event.data.user_id == id_mika }}"
                     sequence:
                       - action: telegram_bot.send_message
                         data:
-                          target: !secret telegram_chat_id_family
+                          target: "{{ id_family }}"
                           message: "Mika, voor welk apparaat wil je tijd?"
                           inline_keyboard:
-                            - "📱 Mijn Telefoon:/dev:m_p, 📟 Mijn Tablet:/dev:m_t"
+                            - "📱 Telefoon:/dev:m_p, 📟 Tablet:/dev:m_t"
                             - "Annuleren ❌:/cancel"
-                  # Yulian
+                  # Als Yulian het vraagt -> Direct naar zijn devices
                   - conditions:
                       - condition: template
                         value_template: "{{ trigger.event.data.user_id == id_yulian }}"
                     sequence:
                       - action: telegram_bot.send_message
                         data:
-                          target: !secret telegram_chat_id_family
+                          target: "{{ id_family }}"
                           message: "Yulian, voor welk apparaat wil je tijd?"
                           inline_keyboard:
-                            - "📱 Mijn Telefoon:/dev:y_p, 📟 Mijn Tablet:/dev:y_t"
+                            - "📱 Telefoon:/dev:y_p, 📟 Tablet:/dev:y_t"
                             - "Annuleren ❌:/cancel"
+                # Als een ouder (of onbekende) het vraagt -> Eerst kind kiezen
                 default:
                   - action: telegram_bot.send_message
                     data:
-                      target: !secret telegram_chat_id_family
-                      message: "Voor wie en welk apparaat is de extra tijd?"
+                      target: "{{ id_family }}"
+                      message: "Voor welk kind wil je extra tijd regelen?"
                       inline_keyboard:
-                        - "📱 Mika Telefoon:/dev:m_p, 📱 Yulian Telefoon:/dev:y_p"
-                        - "📟 Mika Tablet:/dev:m_t, 📟 Yulian Tablet:/dev:y_t"
+                        - "👦 Mika:/child:mika, 🧒 Yulian:/child:yulian"
                         - "Annuleren ❌:/cancel"
 
-          # --- STAP 2: Apparaat gekozen ---
+          # --- STAP 2: Kind gekozen (Alleen voor ouders flow) ---
+          - conditions:
+              - condition: trigger
+                id: "callback"
+              - condition: template
+                value_template: "{{ trigger.event.data.data.startswith('/child:') }}"
+            sequence:
+              - variables:
+                  child: "{{ trigger.event.data.data.split(':')[1] }}"
+              - action: telegram_bot.edit_message
+                data:
+                  message_id: "{{ trigger.event.data.message.message_id }}"
+                  chat_id: "{{ trigger.event.data.message.chat.id }}"
+                  message: "Welk apparaat van {{ child | capitalize }}?"
+                  inline_keyboard: >
+                    {% if child == 'mika' %}
+                      [["📱 Telefoon:/dev:m_p", "📟 Tablet:/dev:m_t"], ["Annuleren ❌:/cancel"]]
+                    {% else %}
+                      [["📱 Telefoon:/dev:y_p", "📟 Tablet:/dev:y_t"], ["Annuleren ❌:/cancel"]]
+                    {% endif %}
+
+          # --- STAP 3: Apparaat gekozen -> Vraag om de tijd ---
           - conditions:
               - condition: trigger
                 id: "callback"
@@ -109,12 +123,8 @@ automation:
                   inline_keyboard:
                     - "15m:/add:{{code}}:15, 30m:/add:{{code}}:30, 1u:/add:{{code}}:60"
                     - "Afwijzen ❌:/cancel"
-              - action: telegram_bot.answer_callback_query
-                data:
-                  callback_query_id: "{{ trigger.event.data.id }}"
-                  message: "Keuze doorgegeven aan ouders."
 
-          # --- STAP 3: Tijd Goedkeuren ---
+          # --- STAP 4: Tijd Goedkeuren (Alleen door ouders) ---
           - conditions:
               - condition: trigger
                 id: "callback"
@@ -152,10 +162,6 @@ automation:
                       chat_id: "{{ trigger.event.data.message.chat.id }}"
                       message: "✅ **Goedgekeurd door {{ approver_name }}!**\nEr is {{ minutes }} minuten toegevoegd aan {{ device_display }}."
                       inline_keyboard: []
-                  - action: telegram_bot.answer_callback_query
-                    data:
-                      callback_query_id: "{{ trigger.event.data.id }}"
-                      message: "Tijd succesvol toegevoegd!"
                 else:
                   - action: telegram_bot.answer_callback_query
                     data:
@@ -163,7 +169,7 @@ automation:
                       message: "⛔ Alleen papa of mama mogen dit goedkeuren!"
                       show_alert: true
 
-          # --- STAP 4: Annuleren ---
+          # --- STAP 5: Annuleren ---
           - conditions:
               - condition: trigger
                 id: "callback"
@@ -206,7 +212,7 @@ automation:
               - condition: trigger
                 id: "lock"
             sequence:
-              - action: switch.turn_on
+              - action: switch.turn_off
                 target:
                   entity_id: 
                     - switch.sm_a176b
@@ -223,7 +229,7 @@ automation:
               - condition: trigger
                 id: "unlock"
             sequence:
-              - action: switch.turn_off
+              - action: switch.turn_on
                 target:
                   entity_id: 
                     - switch.sm_a176b
