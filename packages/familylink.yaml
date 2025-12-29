@@ -1,21 +1,29 @@
 #################################################################
-# Package: Google Family Link Integratie
+# Package: Google Family Link & Nintendo Switch Integratie
 # Beschrijving: Beheer van schermtijd, verzoeken en statistieken
 # Auteur: Jeroen & Home Assistant Architect
 #################################################################
 
 automation:
+  # ----------------------------------------------------------------
+  # 1. INTERACTIEF TIJD VERZOEK (Telegram)
+  # ----------------------------------------------------------------
   - id: family_link_interactive_flow
     alias: "Family Link: Interactief Tijd Verzoek"
-    description: "Geoptimaliseerde flow: Kind-keuze -> Device-keuze -> Tijd-keuze"
+    description: "Handelt verzoeken om extra schermtijd af via interactieve Telegram knoppen."
     mode: parallel
     
     variables:
-      # Gegevens uit je !secrets en bestaande configuratie
       id_mika: !secret telegram_id_mika
       id_yulian: !secret telegram_id_yulian
       id_parents: !secret telegram_parents
-      id_family: !secret telegram_chat_id_family
+      # Dynamische Chat ID: Kiest Test-chat of Family-chat op basis van label 'test'
+      id_family: >
+        {% if 'test' in labels(this.entity_id) | default([], true) %}
+          {{ states('input_text.telegram_chatid_test') }}
+        {% else %}
+          {{ states('input_text.telegram_chatid_family') }}
+        {% endif %}
       approver_name: "{{ trigger.event.data.from_first_name | default('een ouder', true) }}"
 
     trigger:
@@ -33,19 +41,25 @@ automation:
 
     action:
       - choose:
-          # --- STAP 1: Initiële trigger (Wie vraagt het?) ---
+          # --- STAP 1: Vraag welk apparaat ---
           - conditions:
               - condition: trigger
                 id: "start_request"
+              # Check: Bericht in de juiste groep (Test of Family)
+              # We converteren naar string om zeker te zijn dat de vergelijking klopt
               - condition: template
-                value_template: "{{ trigger.event.data.chat_id == id_family }}"
-              - condition: template
-                value_template: >
-                  {{ trigger.event.event_type == 'telegram_command' or 
-                     ('tijd' in trigger.event.data.text | lower or 'minuten' in trigger.event.data.text | lower) }}
+                value_template: "{{ trigger.event.data.chat_id | string == id_family }}"
+              - condition: or
+                conditions:
+                  - condition: template
+                    value_template: "{{ trigger.event.event_type == 'telegram_command' }}"
+                  - condition: template
+                    value_template: >
+                      {{ trigger.event.event_type == 'telegram_text' and 
+                         ('tijd' in trigger.event.data.text | lower or 'minuten' in trigger.event.data.text | lower) }}
             sequence:
               - choose:
-                  # Als Mika het vraagt -> Direct naar zijn devices
+                  # Mika
                   - conditions:
                       - condition: template
                         value_template: "{{ trigger.event.data.user_id == id_mika }}"
@@ -55,9 +69,10 @@ automation:
                           target: "{{ id_family }}"
                           message: "Mika, voor welk apparaat wil je tijd?"
                           inline_keyboard:
-                            - "📱 Telefoon:/dev:m_p, 📟 Tablet:/dev:m_t"
+                            - "📱 Mijn Telefoon:/dev:m_p, 📟 Mijn Tablet:/dev:m_t"
+                            - "🎮 Nintendo Switch:/dev:switch_select"
                             - "Annuleren ❌:/cancel"
-                  # Als Yulian het vraagt -> Direct naar zijn devices
+                  # Yulian
                   - conditions:
                       - condition: template
                         value_template: "{{ trigger.event.data.user_id == id_yulian }}"
@@ -67,45 +82,47 @@ automation:
                           target: "{{ id_family }}"
                           message: "Yulian, voor welk apparaat wil je tijd?"
                           inline_keyboard:
-                            - "📱 Telefoon:/dev:y_p, 📟 Tablet:/dev:y_t"
+                            - "📱 Mijn Telefoon:/dev:y_p, 📟 Mijn Tablet:/dev:y_t"
+                            - "🎮 Nintendo Switch:/dev:switch_select"
                             - "Annuleren ❌:/cancel"
-                # Als een ouder (of onbekende) het vraagt -> Eerst kind kiezen
                 default:
                   - action: telegram_bot.send_message
                     data:
                       target: "{{ id_family }}"
-                      message: "Voor welk kind wil je extra tijd regelen?"
+                      message: "Voor wie en welk apparaat is de extra tijd?"
                       inline_keyboard:
-                        - "👦 Mika:/child:mika, 🧒 Yulian:/child:yulian"
+                        - "📱 Mika Telefoon:/dev:m_p, 📱 Yulian Telefoon:/dev:y_p"
+                        - "📟 Mika Tablet:/dev:m_t, 📟 Yulian Tablet:/dev:y_t"
+                        - "🎮 Nintendo Switch:/dev:switch_select"
                         - "Annuleren ❌:/cancel"
 
-          # --- STAP 2: Kind gekozen (Alleen voor ouders flow) ---
+          # --- STAP 1b: Switch Selectie Menu ---
           - conditions:
               - condition: trigger
                 id: "callback"
               - condition: template
-                value_template: "{{ trigger.event.data.data.startswith('/child:') }}"
+                value_template: "{{ trigger.event.data.data == '/dev:switch_select' }}"
             sequence:
-              - variables:
-                  child: "{{ trigger.event.data.data.split(':')[1] }}"
               - action: telegram_bot.edit_message
                 data:
                   message_id: "{{ trigger.event.data.message.message_id }}"
                   chat_id: "{{ trigger.event.data.message.chat.id }}"
-                  message: "Welk apparaat van {{ child | capitalize }}?"
-                  inline_keyboard: >
-                    {% if child == 'mika' %}
-                      [["📱 Telefoon:/dev:m_p", "📟 Tablet:/dev:m_t"], ["Annuleren ❌:/cancel"]]
-                    {% else %}
-                      [["📱 Telefoon:/dev:y_p", "📟 Tablet:/dev:y_t"], ["Annuleren ❌:/cancel"]]
-                    {% endif %}
+                  message: "Welke Nintendo Switch?"
+                  inline_keyboard:
+                    - "Switch (Standaard):/dev:sw_std, Switch Lite:/dev:sw_lite"
+                    - "Switch 2:/dev:sw_2"
+                    - "Terug ↩️:/start_request, Annuleren ❌:/cancel"
+              - action: telegram_bot.answer_callback_query
+                data:
+                  callback_query_id: "{{ trigger.event.data.id }}"
+                  message: "Kies een console."
 
-          # --- STAP 3: Apparaat gekozen -> Vraag om de tijd ---
+          # --- STAP 2: Apparaat gekozen (Telefoons/Tablets) ---
           - conditions:
               - condition: trigger
                 id: "callback"
               - condition: template
-                value_template: "{{ trigger.event.data.data.startswith('/dev:') }}"
+                value_template: "{{ trigger.event.data.data.startswith('/dev:') and not trigger.event.data.data.startswith('/dev:sw_') and trigger.event.data.data != '/dev:switch_select' }}"
             sequence:
               - variables:
                   code: "{{ trigger.event.data.data.split(':')[1] }}"
@@ -123,8 +140,41 @@ automation:
                   inline_keyboard:
                     - "15m:/add:{{code}}:15, 30m:/add:{{code}}:30, 1u:/add:{{code}}:60"
                     - "Afwijzen ❌:/cancel"
+              - action: telegram_bot.answer_callback_query
+                data:
+                  callback_query_id: "{{ trigger.event.data.id }}"
+                  message: "Keuze doorgegeven aan ouders."
 
-          # --- STAP 4: Tijd Goedkeuren (Alleen door ouders) ---
+          # --- STAP 2b: Apparaat gekozen (Switches) ---
+          - conditions:
+              - condition: trigger
+                id: "callback"
+              - condition: template
+                value_template: "{{ trigger.event.data.data.startswith('/dev:sw_') }}"
+            sequence:
+              - variables:
+                  code: "{{ trigger.event.data.data.split(':')[1] }}"
+                  device_name: >
+                    {% if code == 'sw_std' %}Nintendo Switch
+                    {% elif code == 'sw_lite' %}Switch Lite
+                    {% elif code == 'sw_2' %}Switch 2
+                    {% endif %}
+              - action: telegram_bot.edit_message
+                data:
+                  message_id: "{{ trigger.event.data.message.message_id }}"
+                  chat_id: "{{ trigger.event.data.message.chat.id }}"
+                  message: "Verzoek voor **{{ device_name }}**.\nOuders, hoeveel speeltijd?"
+                  inline_keyboard:
+                    - "5m:/addsw:{{code}}:5, 15m:/addsw:{{code}}:15"
+                    - "30m:/addsw:{{code}}:30, 1u:/addsw:{{code}}:60"
+                    - "Onbeperkt ♾️:/addsw:{{code}}:999"
+                    - "Afwijzen ❌:/cancel"
+              - action: telegram_bot.answer_callback_query
+                data:
+                  callback_query_id: "{{ trigger.event.data.id }}"
+                  message: "Opties getoond."
+
+          # --- STAP 3: Tijd Goedkeuren (Telefoons/Tablets) ---
           - conditions:
               - condition: trigger
                 id: "callback"
@@ -162,6 +212,10 @@ automation:
                       chat_id: "{{ trigger.event.data.message.chat.id }}"
                       message: "✅ **Goedgekeurd door {{ approver_name }}!**\nEr is {{ minutes }} minuten toegevoegd aan {{ device_display }}."
                       inline_keyboard: []
+                  - action: telegram_bot.answer_callback_query
+                    data:
+                      callback_query_id: "{{ trigger.event.data.id }}"
+                      message: "Tijd succesvol toegevoegd!"
                 else:
                   - action: telegram_bot.answer_callback_query
                     data:
@@ -169,7 +223,102 @@ automation:
                       message: "⛔ Alleen papa of mama mogen dit goedkeuren!"
                       show_alert: true
 
-          # --- STAP 5: Annuleren ---
+          # --- STAP 3b: Tijd Goedkeuren (Switches) ---
+          - conditions:
+              - condition: trigger
+                id: "callback"
+              - condition: template
+                value_template: "{{ trigger.event.data.data.startswith('/addsw:') }}"
+            sequence:
+              - if:
+                  - condition: template
+                    value_template: "{{ trigger.event.data.user_id | int in id_parents }}" 
+                then:
+                  - variables:
+                      code: "{{ trigger.event.data.data.split(':')[1] }}"
+                      minutes: "{{ trigger.event.data.data.split(':')[2] | int }}"
+                      # Bepaal entiteiten op basis van code
+                      limit_entity: >
+                        {% if code == 'sw_std' %}number.switch_max_screentime_today
+                        {% elif code == 'sw_lite' %}number.switch_lite_max_screentime_today
+                        {% elif code == 'sw_2' %}number.switch_2_max_screentime_today
+                        {% endif %}
+                      bedtime_entity: >
+                        {% if code == 'sw_std' %}time.switch_bedtime_alarm_2
+                        {% elif code == 'sw_lite' %}time.switch_lite_bedtime_alarm_2
+                        {% elif code == 'sw_2' %}time.switch_2_bedtime_alarm_2
+                        {% endif %}
+                      device_display: >
+                        {% if code == 'sw_std' %}Nintendo Switch
+                        {% elif code == 'sw_lite' %}Switch Lite
+                        {% elif code == 'sw_2' %}Switch 2
+                        {% endif %}
+                      
+                      # Berekeningen voor logica
+                      current_limit: "{{ states(limit_entity) | int(0) }}"
+                      new_limit: "{{ current_limit + minutes }}"
+                      current_bedtime_str: "{{ states(bedtime_entity) }}"
+                      # Als 999 (onbeperkt) gekozen is
+                      is_unlimited: "{{ minutes == 999 }}"
+
+                  # 1. Update de speellimiet
+                  - action: number.set_value
+                    target:
+                      entity_id: "{{ limit_entity }}"
+                    data:
+                      value: "{{ 1440 if is_unlimited else new_limit }}"
+
+                  # 2. Update de bedtijd (indien nodig of onbeperkt)
+                  - if:
+                      - condition: template
+                        value_template: "{{ is_unlimited }}"
+                    then:
+                      - action: time.set_value
+                        target:
+                          entity_id: "{{ bedtime_entity }}"
+                        data:
+                          time: "23:59:00"
+                    else:
+                      # Check of huidige tijd + bonus de bedtijd overschrijdt
+                      - variables:
+                          new_end_time: "{{ now() + timedelta(minutes=minutes) }}"
+                          current_bedtime_dt: "{{ today_at(current_bedtime_str) }}"
+                      - if:
+                          - condition: template
+                            value_template: "{{ new_end_time > current_bedtime_dt }}"
+                        then:
+                          - action: time.set_value
+                            target:
+                              entity_id: "{{ bedtime_entity }}"
+                            data:
+                              time: "{{ new_end_time.strftime('%H:%M:%S') }}"
+
+                  - action: telegram_bot.edit_message
+                    data:
+                      message_id: "{{ trigger.event.data.message.message_id }}"
+                      chat_id: "{{ trigger.event.data.message.chat.id }}"
+                      message: >
+                        ✅ **Switch Update door {{ approver_name }}!**
+                        Apparaat: {{ device_display }}
+                        {% if is_unlimited %}
+                        Status: ♾️ Onbeperkt spelen (limiet verwijderd, bedtijd 23:59)
+                        {% else %}
+                        Extra tijd: {{ minutes }} min
+                        Nieuwe limiet: {{ new_limit }} min
+                        {% endif %}
+                      inline_keyboard: []
+                  - action: telegram_bot.answer_callback_query
+                    data:
+                      callback_query_id: "{{ trigger.event.data.id }}"
+                      message: "Switch succesvol aangepast!"
+                else:
+                  - action: telegram_bot.answer_callback_query
+                    data:
+                      callback_query_id: "{{ trigger.event.data.id }}"
+                      message: "⛔ Alleen ouders mogen dit goedkeuren!"
+                      show_alert: true
+
+          # --- STAP 4: Annuleren ---
           - conditions:
               - condition: trigger
                 id: "callback"
@@ -188,6 +337,13 @@ automation:
     alias: "Family Link: Etenstijd Modus"
     variables:
       id_parents: !secret telegram_parents
+      # Dynamische chat ID ook hier toepassen
+      id_family: >
+        {% if 'test' in labels(this.entity_id) | default([], true) %}
+          {{ states('input_text.telegram_chatid_test') }}
+        {% else %}
+          {{ states('input_text.telegram_chatid_family') }}
+        {% endif %}
       
     trigger:
       - platform: event
@@ -212,23 +368,6 @@ automation:
               - condition: trigger
                 id: "lock"
             sequence:
-              - action: switch.turn_off
-                target:
-                  entity_id: 
-                    - switch.sm_a176b
-                    - switch.lenovo_tb_x606f_van_mika
-                    - switch.sm_a145r
-                    - switch.tablet_yulian
-              - action: telegram_bot.send_message
-                data:
-                  target: !secret telegram_chat_id_family
-                  message: "🍽️ **Etenstijd!** Alle apparaten zijn gepauzeerd. Aan tafel!"
-
-          # --- UNLOCK ---
-          - conditions:
-              - condition: trigger
-                id: "unlock"
-            sequence:
               - action: switch.turn_on
                 target:
                   entity_id: 
@@ -236,9 +375,32 @@ automation:
                     - switch.lenovo_tb_x606f_van_mika
                     - switch.sm_a145r
                     - switch.tablet_yulian
+                    - switch.switch_suspend_software
+                    - switch.switch_lite_suspend_software
+                    - switch.switch_2_suspend_software
               - action: telegram_bot.send_message
                 data:
-                  target: !secret telegram_chat_id_family
+                  target: "{{ id_family }}"
+                  message: "🍽️ **Etenstijd!** Alle apparaten (incl. Switches) zijn gepauzeerd. Aan tafel!"
+
+          # --- UNLOCK ---
+          - conditions:
+              - condition: trigger
+                id: "unlock"
+            sequence:
+              - action: switch.turn_off
+                target:
+                  entity_id: 
+                    - switch.sm_a176b
+                    - switch.lenovo_tb_x606f_van_mika
+                    - switch.sm_a145r
+                    - switch.tablet_yulian
+                    - switch.switch_suspend_software
+                    - switch.switch_lite_suspend_software
+                    - switch.switch_2_suspend_software
+              - action: telegram_bot.send_message
+                data:
+                  target: "{{ id_family }}"
                   message: "✅ Apparaten zijn weer vrijgegeven. Smakelijk gehad!"
 
   # ----------------------------------------------------------------
@@ -252,7 +414,13 @@ automation:
     action:
       - action: telegram_bot.send_message
         data:
-          target: !secret telegram_chat_id_family
+          # Dynamische target direct in de action (geen variabelen blok nodig voor deze simpele action)
+          target: >
+            {% if 'test' in labels(this.entity_id) | default([], true) %}
+              {{ states('input_text.telegram_chatid_test') }}
+            {% else %}
+              {{ states('input_text.telegram_chatid_family') }}
+            {% endif %}
           message: >
             📊 **Schermtijd Vandaag**
             
@@ -265,3 +433,66 @@ automation:
             1. {{ state_attr('sensor.yulian_steenhagen_top_app_1', 'app_name') }}: {{ states('sensor.yulian_steenhagen_top_app_1') | float | round(0) }} min
             2. {{ state_attr('sensor.yulian_steenhagen_top_app_2', 'app_name') }}: {{ states('sensor.yulian_steenhagen_top_app_2') | float | round(0) }} min
             3. {{ state_attr('sensor.yulian_steenhagen_top_app_3', 'app_name') }}: {{ states('sensor.yulian_steenhagen_top_app_3') | float | round(0) }} min
+
+            **Nintendo Switch**
+            - Standaard: {{ states('sensor.switch_used_screen_time_2') }} min (Resterend: {{ states('sensor.switch_screen_time_remaining') }})
+            - Lite: {{ states('sensor.switch_lite_used_screen_time_2') }} min (Resterend: {{ states('sensor.switch_lite_screen_time_remaining') }})
+            - Switch 2: {{ states('sensor.switch_2_used_screen_time_2') }} min (Resterend: {{ states('sensor.switch_2_screen_time_remaining') }})
+
+  # ----------------------------------------------------------------
+  # 4. NINTENDO SWITCH OCHTEND RESET
+  # ----------------------------------------------------------------
+  - id: family_link_nintendo_reset
+    alias: "Family Link: Nintendo Switch Reset"
+    description: "Reset speellimieten en bedtijden van Switches om 06:00 afhankelijk van de dag."
+    trigger:
+      - platform: time
+        at: "06:00:00"
+    action:
+      - choose:
+          # --- WEEKEND (Za/Zo) ---
+          - conditions:
+              - condition: time
+                weekday:
+                  - sat
+                  - sun
+            sequence:
+              # 3 Uur (180 min) speeltijd
+              - action: number.set_value
+                target:
+                  entity_id:
+                    - number.switch_max_screentime_today
+                    - number.switch_lite_max_screentime_today
+                    - number.switch_2_max_screentime_today
+                data:
+                  value: 180
+              # Eindtijd 20:00
+              - action: time.set_value
+                target:
+                  entity_id:
+                    - time.switch_bedtime_alarm_2
+                    - time.switch_lite_bedtime_alarm_2
+                    - time.switch_2_bedtime_alarm_2
+                data:
+                  time: "20:00:00"
+
+        # --- WEEKDAG (Ma-Vr) ---
+        default:
+          # 2 Uur (120 min) speeltijd
+          - action: number.set_value
+            target:
+              entity_id:
+                - number.switch_max_screentime_today
+                - number.switch_lite_max_screentime_today
+                - number.switch_2_max_screentime_today
+            data:
+              value: 120
+          # Eindtijd 19:00
+          - action: time.set_value
+            target:
+              entity_id:
+                - time.switch_bedtime_alarm_2
+                - time.switch_lite_bedtime_alarm_2
+                - time.switch_2_bedtime_alarm_2
+            data:
+              time: "19:00:00"
