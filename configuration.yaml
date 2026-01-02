@@ -28,12 +28,12 @@ http:
 notify:
   - name: telegram_family
     platform: telegram
-    chat_id: !secret telegram_chat_id_family
+    chat_id: !secret telegram_chatid_family
 
   - name: telegram_test
     platform: telegram
-    chat_id: !secret telegram_chat_id_test
+    chat_id: !secret telegram_chatid_test
 
   - name: telegram_jeroen
     platform: telegram
-    chat_id: !secret telegram_chat_id_jeroen
+    chat_id: !secret telegram_id_jeroen
