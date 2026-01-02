@@ -324,8 +324,8 @@
     below: 2
   actions:
   - target:
-      entity_id: light.lamp_eettafel_3
-    action: homeassistant.turn_on
+      entity_id: light.eetkamer_hanglamp_3 # Nieuwe naam
+    action: light.turn_on # 'homeassistant.turn_on' is prima, maar light.turn_on is specifieker
   mode: single
 - id: '1760282282958'
   alias: Droger is klaar
@@ -806,7 +806,7 @@
     above: 0
   actions:
   - target:
-      entity_id: light.lamp_eettafel_3
+      entity_id: light.eetkamer_hanglamp_3 # Nieuwe naam
     action: light.turn_on
   mode: single
 - id: '1763327431528'

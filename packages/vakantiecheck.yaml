@@ -1,0 +1,72 @@
+###############################################################################
+# Package: Schoolvakanties & Vrije Dagen (Regio Noord)
+# Description: Haalt dynamisch vakanties op en bepaalt of het "Vakantiemodus" is.
+###############################################################################
+
+# 1. Handmatige schakelaar voor uitzonderingen (bv. studiedag)
+input_boolean:
+  schoolvakantie_handmatig:
+    name: "Schoolvakantie (Handmatig)"
+    icon: mdi:school-off
+
+# 2. De ICAL sensor die de kalender uitleest
+sensor:
+  - platform: ical
+    name: "Schoolvakanties Noord"
+    # URL via agenda-abonnement.nl (Regio Noord)
+    # De link werkt (download = goed teken), HA leest dit bestand uit.
+    url: https://agenda-abonnement.nl/schoolvakantiesnoordnederland.ics
+    icon: mdi:calendar-star
+    max_events: 5
+    # TEST MODUS: Ververs elk uur (3600 sec) in plaats van elke maand.
+    # Als alles werkt kun je dit later terugzetten naar 2592000 (30 dagen).
+    scan_interval: 3600
+
+# 3. De logica: Is het NU vakantie?
+template:
+  - binary_sensor:
+      - name: "Status Schoolvakantie"
+        unique_id: is_schoolvakantie_noord
+        icon: >
+          {% if is_state('binary_sensor.status_schoolvakantie', 'on') %}
+            mdi:beach
+          {% else %}
+            mdi:school
+          {% endif %}
+        state: >
+          {# 1. Check de handmatige override #}
+          {% if is_state('input_boolean.schoolvakantie_handmatig', 'on') %}
+            true
+          {# 2. Check de ICAL data (Loop door ALLE opgehaalde events) #}
+          {% else %}
+            {# We gebruiken een namespace om variabelen binnen de loop te kunnen wijzigen #}
+            {% set ns = namespace(is_vacation=false) %}
+            
+            {# Loop door event 0 t/m 4 (aangezien max_events op 5 staat) #}
+            {% for i in range(5) %}
+              {% set entity_id = 'sensor.schoolvakanties_noord_event_' ~ i %}
+              
+              {# Check of de sensor bestaat en data heeft #}
+              {% if has_value(entity_id) and state_attr(entity_id, 'start') %}
+                {# Haal start en eindtijd op en converteer naar lokale tijd #}
+                {% set start = state_attr(entity_id, 'start') | as_datetime | as_local %}
+                {% set end = state_attr(entity_id, 'end') | as_datetime | as_local %}
+                
+                {# Is het nu tussen start en eind? #}
+                {# Let op: 'now() < end' want iCal eindtijden zijn vaak exclusief (00:00 volgende dag) #}
+                {% if start <= now() < end %}
+                  {% set ns.is_vacation = true %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            
+            {{ ns.is_vacation }}
+          {% endif %}
+
+      # Optioneel: Een sensor die 'Vakantie Of Weekend' heet (handig voor wekkers)
+      - name: "Status Vrij (Vakantie of Weekend)"
+        unique_id: is_vrij_of_weekend
+        state: >
+          {# Is het vakantie OF is het zaterdag(6)/zondag(7)? #}
+          {{ is_state('binary_sensor.status_schoolvakantie', 'on') or 
+             now().isoweekday() >= 6 }}

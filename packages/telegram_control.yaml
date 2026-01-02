@@ -1,0 +1,260 @@
+telegram_bot:
+  - platform: polling
+    api_key: !secret telegram_api_key
+    allowed_chat_ids:
+      - !secret telegram_chat_id_family
+      - !secret telegram_chat_id_test
+      - !secret telegram_id_jeroen
+      - !secret telegram_id_mika
+      - !secret telegram_id_yulian
+      - !secret telegram_id_linda
+
+automation:
+  # ----------------------------------------------------------------------------
+  # 1. HOOFDMENU (Trigger: /menu of /start)
+  # ----------------------------------------------------------------------------
+  - alias: "Telegram - Toon Huis Menu"
+    id: "telegram_main_menu"
+    trigger:
+      - platform: event
+        event_type: telegram_command
+        event_data:
+          command: "/menu"
+      - platform: event
+        event_type: telegram_command
+        event_data:
+          command: "/start"
+    action:
+      - action: telegram_bot.send_message
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+          title: "🏡 **Huize Steenhagen**"
+          message: "Kies een verdieping of actie:"
+          inline_keyboard:
+            - "🏚️ Zolder:/f:Zolder"
+            - "🛏️ 1e Verdieping:/f:1e Verdieping"
+            - "🛋️ Begane Grond:/f:Begane Grond"
+            - "📊 Status:/status, 🎬 Scenes:/scenes"
+
+  # ----------------------------------------------------------------------------
+  # 2. MENU LOGICA & ACTIES
+  # ----------------------------------------------------------------------------
+  - alias: "Telegram - Callback Handler"
+    id: "telegram_callback_handler"
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+    action:
+      # BELANGRIJK: Direct bevestigen met een berichtje om crashes te voorkomen
+      - action: telegram_bot.answer_callback_query
+        data:
+          callback_query_id: "{{ trigger.event.data.id }}"
+          message: "Verwerken..."
+
+      # Variabelen uitpakken
+      - variables:
+          parts: "{{ trigger.event.data.data.split(':') }}"
+          cmd: "{{ parts[0] }}"
+          target: "{{ parts[1] if parts|length > 1 else '' }}"
+          extra: "{{ parts[2] if parts|length > 2 else '' }}"
+
+      - choose:
+          # --- STAP 1: VERDIEPING KIEZEN ---
+          - conditions: "{{ cmd == '/f' }}"
+            sequence:
+              - variables:
+                  rooms: >
+                    {% if target == 'Zolder' %} ['Zolder']
+                    {% elif target == '1e Verdieping' %} ['Slaapkamer', 'Kantoor', 'Slaapkamer Yulian']
+                    {% elif target == 'Begane Grond' %} ['Woonkamer', 'Eetkamer', 'Serre', 'Keuken', 'Schuur']
+                    {% else %} [] {% endif %}
+              
+              - action: telegram_bot.edit_message
+                data:
+                  chat_id: "{{ trigger.event.data.chat_id }}"
+                  message_id: "{{ trigger.event.data.message.message_id }}"
+                  title: "📍 {{ target }}"
+                  message: "Kies een kamer:"
+                  inline_keyboard: >
+                    {% set ns = namespace(buttons=[]) %}
+                    {% for room in rooms %}
+                      {% set ns.buttons = ns.buttons + ["🚪 " ~ room ~ ":/r:" ~ room ~ ":" ~ target] %}
+                    {% endfor %}
+                    {{ ns.buttons + ["🔙 Terug:/menu_cmd"] }}
+
+          # --- STAP 2: APPARAAT KIEZEN ---
+          - conditions: "{{ cmd == '/r' }}"
+            sequence:
+              # Slimme entiteit zoeker (Naam of ID)
+              - variables:
+                  entities: "{{ area_entities(target) or area_entities(target|lower|replace(' ','_')) }}"
+              
+              - if: "{{ entities == none or entities | count == 0 }}"
+                then:
+                  - action: telegram_bot.edit_message
+                    data:
+                      chat_id: "{{ trigger.event.data.chat_id }}"
+                      message_id: "{{ trigger.event.data.message.message_id }}"
+                      message: "⚠️ Geen apparaten in '{{ target }}'."
+                      inline_keyboard: ["🔙 Terug:/f:{{ extra }}"]
+                else:
+                  - action: telegram_bot.edit_message
+                    data:
+                      chat_id: "{{ trigger.event.data.chat_id }}"
+                      message_id: "{{ trigger.event.data.message.message_id }}"
+                      title: "💡 {{ target }}"
+                      message: "Bediening:"
+                      inline_keyboard: >
+                        {% set ns = namespace(buttons=[]) %}
+                        {# Filter alleen relevante domeinen #}
+                        {% set devs = expand(entities) 
+                           | selectattr('domain', 'in', ['light','switch','media_player','cover','lock']) 
+                           | sort(attribute='name') %}
+                        
+                        {% for dev in devs %}
+                          {# --- BASIS ICOON (Lampen/Switches) --- #}
+                          {% set icon = '🟡' if dev.state == 'on' else '⚫' %}
+                          {% set status_txt = '' %}
+
+                          {# --- CUSTOM ICOON: ROLLUIKEN --- #}
+                          {% if 'cover' in dev.entity_id %}
+                            {% if dev.state == 'open' %}
+                               {% set icon = '🪟' %}
+                               {% set status_txt = '(Open)' %}
+                            {% elif dev.state == 'closed' %}
+                               {% set icon = '🌚' %}
+                               {% set status_txt = '(Dicht)' %}
+                            {% else %}
+                               {% set icon = '⏳' %}
+                               {% set status_txt = '(' ~ dev.state ~ ')' %}
+                            {% endif %}
+                          {% endif %}
+
+                          {# --- CUSTOM ICOON: SLOTEN --- #}
+                          {% if 'lock' in dev.entity_id %}
+                             {% set icon = '🔒' if dev.state == 'locked' else '🔓' %}
+                          {% endif %}
+                          
+                          {# Knop maken: Icoon Naam (Status) #}
+                          {% set label = icon ~ " " ~ dev.name ~ " " ~ status_txt %}
+                          {% set ns.buttons = ns.buttons + [label ~ ":/t:" ~ dev.entity_id ~ ":" ~ target] %}
+                        {% endfor %}
+                        
+                        {{ ns.buttons + ["🔙 Terug:/f:" ~ extra, "🏠 Menu:/menu_cmd"] }}
+
+          # --- STAP 3: ACTIE UITVOEREN (Toggle) ---
+          - conditions: "{{ cmd == '/t' }}"
+            sequence:
+              - action: homeassistant.toggle
+                target:
+                  entity_id: "{{ target }}"
+              - delay: "00:00:01" # Even wachten op status update
+              
+              # Menu verversen met nieuwe status (Kopie van logica hierboven)
+              - action: telegram_bot.edit_message
+                data:
+                  chat_id: "{{ trigger.event.data.chat_id }}"
+                  message_id: "{{ trigger.event.data.message.message_id }}"
+                  message: "Status bijgewerkt voor **{{ extra }}**:"
+                  inline_keyboard: >
+                    {% set entities = area_entities(extra) or area_entities(extra|lower|replace(' ','_')) %}
+                    {% set ns = namespace(buttons=[]) %}
+                    {% set devs = expand(entities) 
+                           | selectattr('domain', 'in', ['light','switch','media_player','cover','lock']) 
+                           | sort(attribute='name') %}
+
+                    {% for dev in devs %}
+                          {# --- BASIS ICOON --- #}
+                          {% set icon = '🟡' if dev.state == 'on' else '⚫' %}
+                          {% set status_txt = '' %}
+
+                          {# --- ROLLUIKEN --- #}
+                          {% if 'cover' in dev.entity_id %}
+                            {% if dev.state == 'open' %}
+                               {% set icon = '🪟' %}
+                               {% set status_txt = '(Open)' %}
+                            {% elif dev.state == 'closed' %}
+                               {% set icon = '🌚' %}
+                               {% set status_txt = '(Dicht)' %}
+                            {% else %}
+                               {% set icon = '⏳' %}
+                               {% set status_txt = '(' ~ dev.state ~ ')' %}
+                            {% endif %}
+                          {% endif %}
+
+                          {# --- SLOTEN --- #}
+                          {% if 'lock' in dev.entity_id %}
+                             {% set icon = '🔒' if dev.state == 'locked' else '🔓' %}
+                          {% endif %}
+                          
+                          {% set label = icon ~ " " ~ dev.name ~ " " ~ status_txt %}
+                          {% set ns.buttons = ns.buttons + [label ~ ":/t:" ~ dev.entity_id ~ ":" ~ extra] %}
+                    {% endfor %}
+                    {{ ns.buttons + ["🔙 Terug:/f:Begane Grond", "🏠 Menu:/menu_cmd"] }}
+
+          # --- HULP COMMANDOS ---
+          - conditions: "{{ cmd == '/menu_cmd' }}"
+            sequence:
+              - action: telegram_bot.edit_message
+                data:
+                  chat_id: "{{ trigger.event.data.chat_id }}"
+                  message_id: "{{ trigger.event.data.message.message_id }}"
+                  title: "🏡 Huize Steenhagen"
+                  message: "Kies een verdieping:"
+                  inline_keyboard:
+                    - "🏚️ Zolder:/f:Zolder"
+                    - "🛏️ 1e Verdieping:/f:1e Verdieping"
+                    - "🛋️ Begane Grond:/f:Begane Grond"
+                    - "📊 Status:/status, 🎬 Scenes:/scenes"
+          
+          - conditions: "{{ cmd == '/status' }}"
+            sequence:
+              - action: telegram_bot.edit_message
+                data:
+                  chat_id: "{{ trigger.event.data.chat_id }}"
+                  message_id: "{{ trigger.event.data.message.message_id }}"
+                  message: "🌡️ Woonkamer: {{ states('sensor.temperatuur_woonkamer') }}°C"
+                  inline_keyboard: ["🔙:/menu_cmd"]
+
+          - conditions: "{{ cmd == '/scenes' }}"
+            sequence:
+              - action: telegram_bot.edit_message
+                data:
+                  chat_id: "{{ trigger.event.data.chat_id }}"
+                  message_id: "{{ trigger.event.data.message.message_id }}"
+                  message: "Scenes:"
+                  inline_keyboard:
+                    - "😴 Jeroen Slaapt:/call:automation.trigger:automation.jeroen_slaapt"
+                    - "🔙:/menu_cmd"
+
+          - conditions: "{{ cmd == '/call' }}"
+            sequence:
+               - action: "{{ target }}"
+                 target:
+                   entity_id: "{{ extra }}"
+
+  # ----------------------------------------------------------------------------
+  # 3. ASSIST AI
+  # ----------------------------------------------------------------------------
+  - alias: "Telegram - Assist AI"
+    id: "telegram_assist_ai"
+    trigger:
+      - platform: event
+        event_type: telegram_text
+    condition:
+      - condition: template
+        value_template: "{{ not trigger.event.data.text.startswith('/') }}"
+    action:
+      - action: telegram_bot.send_chat_action
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+          action: typing
+      - action: conversation.process
+        data:
+          text: "{{ trigger.event.data.text }}"
+          language: "nl"
+        response_variable: agent
+      - action: telegram_bot.send_message
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+          message: "{{ agent.response.speech.plain.speech }}"

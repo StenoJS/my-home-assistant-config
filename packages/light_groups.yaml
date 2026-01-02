@@ -1,29 +1,63 @@
-# Package: Light Groups
-# Description: Groups individual bulbs into controllable fixtures.
+# Bestand: packages/light_groups.yaml (of packages/zones.yaml)
 
 light:
   # ---------------------------------------------------------
-  # DINING TABLE (Eettafel)
-  # Grouping 5 bulbs into one entity: light.eettafel_lampen
+  # BEGANE GROND
   # ---------------------------------------------------------
   - platform: group
-    name: "Eettafel Lampen"
-    unique_id: light_group_eettafel_lights
+    name: "Verlichting Begane Grond"
+    unique_id: light_group_zone_begane_grond
     entities:
-      - light.eettafel_1  #
-      - light.eettafel_2
-      - light.eettafel_3
-      - light.eettafel_4
-      - light.eettafel_5
+      # Woonkamer
+      - light.woonkamer_plafond_1
+      - light.woonkamer_plafond_2
+      - light.woonkamer_plafond_3
+  #    - light.woonkamer_staande_lamp  # (Was light.lamp_lamp)
+      # Eetkamer
+      - light.eetkamer_hanglamp_1
+      - light.eetkamer_hanglamp_2
+      - light.eetkamer_hanglamp_3
+      - light.eetkamer_hanglamp_4
+      - light.eetkamer_hanglamp_5
+      # Serre
+      - light.serre_plafond_1
+      - light.serre_plafond_2
+      - light.serre_plafond_3
+      # Overig
+      - light.schuur_1       # (Was light.berging_1)
+      # Optioneel: Tuin (vaak handig om bij BG te hebben voor 'alles uit')
+      - light.tuin_overkapping_lamp
 
   # ---------------------------------------------------------
-  # LIVING ROOM CEILING (Woonkamer Plafond)
-  # Grouping 3 bulbs into one entity: light.woonkamer_plafond
+  # 1E VERDIEPING
   # ---------------------------------------------------------
   - platform: group
-    name: "Woonkamer Plafond"
-    unique_id: light_group_woonkamer_plafond
+    name: "Verlichting 1e Verdieping"
+    unique_id: light_group_zone_eerste_verdieping
     entities:
-      - light.woonkamer_1  #
-      - light.woonkamer_2
-      - light.woonkamer_3
+      - light.slaapkamer_yulian_plafond
+      - light.badkamer_1
+      - light.kantoor_plafond       # (Was light.lamp_kantoor)
+      # Let op: 'light.bedverwarming_dnd' heb ik weggelaten (is status LED)
+
+  # ---------------------------------------------------------
+  # ZOLDER
+  # ---------------------------------------------------------
+  - platform: group
+    name: "Verlichting Zolder"
+    unique_id: light_group_zone_zolder
+    entities:
+      - light.slaapkamer_mika_plafond_1
+      - light.slaapkamer_mika_plafond_2
+
+  # ---------------------------------------------------------
+  # HELE HUIS (MASTER)
+  # ---------------------------------------------------------
+  - platform: group
+    name: "Verlichting Hele Huis"
+    unique_id: light_group_hele_huis
+    entities:
+      # Door groepen te nesten, blijft dit overzichtelijk
+      - light.verlichting_begane_grond
+      - light.verlichting_1e_verdieping
+      - light.verlichting_zolder
