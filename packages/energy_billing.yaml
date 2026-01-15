@@ -1,0 +1,113 @@
+# Package voor het bijhouden van het afrekenjaar (21 april t/m 20 april)
+# Onderscheid tussen Piek- en Daltarief voor nauwkeurige vergelijking met de jaarafrekening.
+
+utility_meter:
+  # --- IMPORT (Levering) ---
+  afrekenjaar_import_dal:
+    source: sensor.p1_meter_energie_import_tarief_1
+    name: "Jaarverbruik Dal (Import)"
+    cron: "0 0 21 4 *"
+
+  afrekenjaar_import_piek:
+    source: sensor.p1_meter_energie_import_tarief_2
+    name: "Jaarverbruik Piek (Import)"
+    cron: "0 0 21 4 *"
+
+  afrekenjaar_import_totaal:
+    source: sensor.p1_meter_energy_import
+    name: "Jaarverbruik Totaal (Import)"
+    cron: "0 0 21 4 *"
+
+  kalenderjaar_import_dal:
+    source: sensor.p1_meter_energie_import_tarief_1
+    name: "Jaarverbruik Dal (Import)"
+    cycle: yearly
+
+  kalenderjaar_import_piek:
+    source: sensor.p1_meter_energie_import_tarief_2
+    name: "Jaarverbruik Piek (Import)"
+    cycle: yearly
+
+  kalenderjaar_import_totaal:
+    source: sensor.p1_meter_energy_import
+    name: "Jaarverbruik Totaal (Import)"
+    cycle: yearly
+
+  # --- EXPORT (Teruglevering) ---
+  afrekenjaar_export_dal:
+    source: sensor.p1_meter_energie_export_tarief_1
+    name: "Jaarteruglevering Dal (Export)"
+    cron: "0 0 21 4 *"
+
+  afrekenjaar_export_piek:
+    source: sensor.p1_meter_energie_export_tarief_2
+    name: "Jaarteruglevering Piek (Export)"
+    cron: "0 0 21 4 *"
+
+  afrekenjaar_export_totaal:
+    source: sensor.p1_meter_energie_export
+    name: "Jaarteruglevering Totaal (Export)"
+    cron: "0 0 21 4 *"
+
+  # --- GAS ---
+  afrekenjaar_gas:
+    source: sensor.gas_meter_gas
+    name: "Jaarverbruik Gas"
+    cron: "0 0 21 4 *"
+
+  kalenderjaar_gas:
+    source: sensor.gas_meter_gas
+    name: "Jaarverbruik Gas"
+    cycle: yearly
+
+# Opgewekte energie jaarlijkse en maandelijkse totalen
+  # Jaartotaal van 1-1 tot 31-12
+  energy_production_yearly:
+    source: sensorsensor.solaredge_geproduceerde_energie # VERVANG DOOR JE BRON
+    name: Energie Productie Jaartotaal
+    cycle: yearly
+    
+  # Maandtotaal (reset op de 1e van de maand)
+  energy_production_monthly:
+    source: sensor.solaredge_geproduceerde_energie # VERVANG DOOR JE BRON
+    name: Energie Productie Maandtotaal
+    cycle: monthly
+
+# Dagtotaal (reset elke dag)
+  energy_production_daily:
+    source: sensor.solaredge_geproduceerde_energie # VERVANG DOOR JE BRON
+    name: Energie Productie Dagtotaal
+    cycle: daily
+
+# Optioneel: SQL sensoren of template sensoren zijn niet nodig omdat 
+# Utility Meter de waarde van de 'vorige' periode bewaart in de attributen.
+
+template:
+  - sensor:
+      # --- NETTO BEREKENINGEN (Import - Export per tarief) ---
+      - name: "Afrekenjaar Netto Dal"
+        unique_id: afrekenjaar_netto_dal
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state: >
+          {% set imp = states('sensor.jaarverbruik_dal_import') | float(0) %}
+          {% set exp = states('sensor.jaarteruglevering_dal_export') | float(0) %}
+          {{ (imp - exp) | round(3) }}
+
+      - name: "Afrekenjaar Netto Piek"
+        unique_id: afrekenjaar_netto_piek
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state: >
+          {% set imp = states('sensor.jaarverbruik_piek_import') | float(0) %}
+          {% set exp = states('sensor.jaarteruglevering_piek_export') | float(0) %}
+          {{ (imp - exp) | round(3) }}
+
+      - name: "Afrekenjaar Netto Totaal"
+        unique_id: afrekenjaar_netto_totaal
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state: >
+          {% set imp = states('sensor.jaarverbruik_totaal_import') | float(0) %}
+          {% set exp = states('sensor.jaarteruglevering_totaal_export') | float(0) %}
+          {{ (imp - exp) | round(3) }}

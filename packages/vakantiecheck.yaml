@@ -20,7 +20,7 @@ sensor:
     max_events: 5
     # TEST MODUS: Ververs elk uur (3600 sec) in plaats van elke maand.
     # Als alles werkt kun je dit later terugzetten naar 2592000 (30 dagen).
-    scan_interval: 3600
+    scan_interval: 2592000
 
 # 3. De logica: Is het NU vakantie?
 template:

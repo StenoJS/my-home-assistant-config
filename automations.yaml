@@ -22,7 +22,7 @@
   triggers:
   - type: value
     device_id: 84191f1f59716ea363ae7af551f524d5
-    entity_id: 9c6eeac384b6926589b5561811740da9
+    entity_id: 760fb7f691ec7a5a23f62d5dfd35f854
     domain: sensor
     trigger: device
     above: 70
@@ -130,17 +130,18 @@
     - condition: zone
       entity_id: person.yulian
       zone: zone.home
+      enabled: false
   actions:
   - type: turn_on
     device_id: 5f8e04cf7a18c6d6bcfc8fb711760c99
     entity_id: fa060099b9f3cce702a11dc190b7530a
     domain: light
   - delay: 00:20:00
-  - target:
-      entity_id: light.plafond
-    data:
+  - data:
       brightness_pct: 75
     action: light.turn_on
+    target:
+      entity_id: light.woonkamer_plafond
   mode: single
 - id: '1758563019847'
   alias: Zone Notification
@@ -300,32 +301,6 @@
     data:
       entity_id: media_player.lg_webos_tv_oled55cx9la
       button: ENTER
-  mode: single
-- id: eetkamer_licht_thuiskomst
-  alias: Eetkamer Licht aan bij Donkere Thuiskomst
-  description: Schakelt Lamp Eettafel 3 aan als het donker is en er één persoon thuis
-    komt.
-  triggers:
-  - entity_id: group.all_persons
-    from: not_home
-    to: home
-    trigger: state
-  - entity_id: sensor.aantal_personen_thuis
-    from: '0'
-    to: '1'
-    trigger: state
-  conditions:
-  - condition: state
-    entity_id: sun.sun
-    state: below_horizon
-  - condition: numeric_state
-    entity_id: sensor.aantal_personen_thuis
-    above: 0
-    below: 2
-  actions:
-  - target:
-      entity_id: light.eetkamer_hanglamp_3 # Nieuwe naam
-    action: light.turn_on # 'homeassistant.turn_on' is prima, maar light.turn_on is specifieker
   mode: single
 - id: '1760282282958'
   alias: Droger is klaar
@@ -600,11 +575,18 @@
     metadata: {}
     data:
       cache: true
-      media_player_entity_id: media_player.begane_grond_2
+      media_player_entity_id: media_player.huis
       message: Het eten is klaar, direct beneden komen om te eten, als je te laat
         bent kan je naar bed
     target:
       device_id: ae4f80b8aade1f304ae2d88f2f17404b
+  - delay:
+      hours: 0
+      minutes: 10
+      seconds: 0
+      milliseconds: 0
+  - action: script.het_eten_is_klaar
+    data: {}
   mode: single
 - id: '1761590025747'
   alias: Tag Scan - Dynamische Gebruikersnaam TTS
@@ -754,14 +736,14 @@
     entity_id: 065321b2419d8d8334ddd22c0b2fd893
     domain: sensor
     trigger: device
-    above: 5
+    above: 9
     for:
       hours: 0
-      minutes: 1
-      seconds: 0
+      minutes: 0
+      seconds: 15
   conditions: []
   actions:
-  - action: notify.mobile_app_telefoon_jeroen
+  - action: notify.mobile_app_jeroen_telefoon
     metadata: {}
     data:
       message: Wasmachine aan gezet
@@ -776,38 +758,45 @@
         hours: 0
         minutes: 2
         seconds: 0
-  - action: notify.mobile_app_telefoon_jeroen
+  - action: notify.send_message
     metadata: {}
+    target:
+      entity_id: notify.telegram_thuisapp
     data:
-      message: Wasmachine is klaar
-  - action: notify.mobile_app_linda_a54
+      title: Wasmachine
+      message: De wasmachine is klaar met wassen.
+  - action: notify.mobile_app_linda_telefoon
     metadata: {}
-    data:
-      message: Wasmachine is klaar
+    data: {}
   mode: single
 - id: eetkamer_licht_thuiskomst_combined
-  alias: Eetkamer Licht aan bij Donkere Thuiskomst
-  description: Schakelt Lamp Eettafel 3 aan als het donker is en er iemand thuiskomt
-    (aantal personen stijgt).
+  alias: Eetkamer Licht aan bij Donkere Thuiskomst (Verbeterd)
+  description: Schakelt de hanglamp in bij thuiskomst, met filtering voor GPS jitter
+    door te controleren of de vorige afwezigheid lang genoeg duurde.
   triggers:
-  - platform: state
-    entity_id: sensor.aantal_personen_thuis
+  - trigger: state
+    entity_id: zone.home
   conditions:
   - condition: state
     entity_id: sun.sun
     state: below_horizon
   - condition: template
-    value_template: '{{ trigger.to_state.state | int(0) > trigger.from_state.state
-      | int(0) }}
+    value_template: '{% set to_val = trigger.to_state.state | int(0) %} {% set from_val
+      = trigger.from_state.state | int(0) %} {{ to_val > from_val }}
+
+      '
+  - condition: template
+    value_template: '{{ (now() - trigger.from_state.last_changed).total_seconds()
+      > 120 }}
 
       '
   - condition: numeric_state
-    entity_id: sensor.aantal_personen_thuis
+    entity_id: zone.home
     above: 0
   actions:
-  - target:
-      entity_id: light.eetkamer_hanglamp_3 # Nieuwe naam
-    action: light.turn_on
+  - action: light.turn_on
+    target:
+      entity_id: light.eetkamer_hanglamp_3
   mode: single
 - id: '1763327431528'
   alias: Verwarming serre uit

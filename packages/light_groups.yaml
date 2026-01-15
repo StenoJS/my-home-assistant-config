@@ -1,32 +1,48 @@
-# Bestand: packages/light_groups.yaml (of packages/zones.yaml)
-
 light:
   # ---------------------------------------------------------
-  # BEGANE GROND
+  # SPECIFIEKE SUB-GROEPEN
   # ---------------------------------------------------------
+  
+  # Nieuwe groep voor de 3 plafondspots
   - platform: group
-    name: "Verlichting Begane Grond"
-    unique_id: light_group_zone_begane_grond
+    name: "Woonkamer Plafond"
+    unique_id: light_group_woonkamer_plafond
     entities:
-      # Woonkamer
       - light.woonkamer_plafond_1
       - light.woonkamer_plafond_2
       - light.woonkamer_plafond_3
-  #    - light.woonkamer_staande_lamp  # (Was light.lamp_lamp)
-      # Eetkamer
+
+  # Nieuwe groep voor de 5 hanglampen (Eettafel)
+  - platform: group
+    name: "Eettafel"
+    unique_id: light_group_eettafel
+    entities:
       - light.eetkamer_hanglamp_1
       - light.eetkamer_hanglamp_2
       - light.eetkamer_hanglamp_3
       - light.eetkamer_hanglamp_4
       - light.eetkamer_hanglamp_5
-      # Serre
+
+  # ---------------------------------------------------------
+  # BEGANE GROND (HOOFDGROEP)
+  # ---------------------------------------------------------
+  - platform: group
+    name: "Verlichting Begane Grond"
+    unique_id: light_group_zone_begane_grond
+    entities:
+      # --- Geneste Groepen ---
+      - light.woonkamer_plafond  # Verwijst naar de groep hierboven
+      - light.eettafel           # Verwijst naar de groep hierboven
+      
+      # --- Losse Lampen ---
+      # Serre (kan evt. ook een eigen groep worden als je wilt)
       - light.serre_plafond_1
       - light.serre_plafond_2
       - light.serre_plafond_3
       # Overig
-      - light.schuur_1       # (Was light.berging_1)
-      # Optioneel: Tuin (vaak handig om bij BG te hebben voor 'alles uit')
+      - light.schuur_1
       - light.tuin_overkapping_lamp
+      # - light.woonkamer_staande_lamp (Stond in commentaar in je origineel)
 
   # ---------------------------------------------------------
   # 1E VERDIEPING
@@ -37,8 +53,7 @@ light:
     entities:
       - light.slaapkamer_yulian_plafond
       - light.badkamer_1
-      - light.kantoor_plafond       # (Was light.lamp_kantoor)
-      # Let op: 'light.bedverwarming_dnd' heb ik weggelaten (is status LED)
+      - light.kantoor_plafond
 
   # ---------------------------------------------------------
   # ZOLDER
@@ -57,7 +72,6 @@ light:
     name: "Verlichting Hele Huis"
     unique_id: light_group_hele_huis
     entities:
-      # Door groepen te nesten, blijft dit overzichtelijk
       - light.verlichting_begane_grond
       - light.verlichting_1e_verdieping
       - light.verlichting_zolder

@@ -2,11 +2,34 @@
 # Package: Google Family Link & Nintendo Switch Integratie
 # Beschrijving: Beheer van schermtijd, verzoeken en statistieken
 # Auteur: Jeroen & Home Assistant Architect
-# Versie: 6.0 (Fix: Variable Scoping & Etenstijd triggers)
-# Versie: 6.4 (Add: Inclusief tekstherkenning)
+# Versie: 6.8 (Add: Geheugen voor Switch Etenstijd-logica)
 #################################################################
 
+# ----------------------------------------------------------------
+# NIEUW: Geheugen voor Nintendo Switch Limieten
+# Deze zijn nodig om de oude tijd te onthouden tijdens het eten.
+# ----------------------------------------------------------------
+input_number:
+  mem_nintendo_switch_limit:
+    name: Geheugen Switch Standaard
+    min: -1
+    max: 999
+    mode: box
+  mem_nintendo_switch_lite_limit:
+    name: Geheugen Switch Lite
+    min: -1
+    max: 999
+    mode: box
+  mem_nintendo_switch_2_limit:
+    name: Geheugen Switch 2
+    min: -1
+    max: 999
+    mode: box
+
 automation:
+  # ----------------------------------------------------------------
+  # 1. INTERACTIEF TIJD VERZOEK (Telegram)
+  # ----------------------------------------------------------------
   - id: family_link_interactive_flow
     alias: "Family Link: Interactief Tijd Verzoek"
     description: "Handelt verzoeken om extra schermtijd af via interactieve Telegram knoppen."
@@ -31,7 +54,7 @@ automation:
           chat_id_test: !secret telegram_chatid_test
           chat_id_family: !secret telegram_chatid_family
 
-          # Haal het Chat ID op (robuust voor cmd, txt en callback)
+          # Haal het Chat ID op
           current_chat_id: >-
             {% set d = trigger.event.data %}
             {% if d.chat_id is defined %}{{ d.chat_id }}
@@ -40,7 +63,7 @@ automation:
 
           current_user_id: "{{ trigger.event.data.user_id | default(0) }}"
 
-          # Naam van de afzender ophalen zonder crash
+          # Naam van de afzender ophalen
           approver_name: >-
             {% set d = trigger.event.data %}
             {% if d.from_first is defined %}{{ d.from_first }}
@@ -92,7 +115,7 @@ automation:
                         - "Annuleren ❌:/cancel"
 
           # ------------------------------------------------------
-          # STAP 1b: SELECTIE MENU FL (Mika/Yulian)
+          # STAP 1b: SELECTIE MENU FAMILY LINK
           # ------------------------------------------------------
           - conditions:
               - condition: template
@@ -194,7 +217,8 @@ automation:
                       payload: "{{ trigger.event.data.data.split(':') }}"
                       code: "{{ payload[1] }}"
                       minutes: "{{ payload[2] }}"
-                      target_entity: "{{ {'m_p':'switch.sm_a176b','m_t':'switch.lenovo_tb_x606f_van_mika','y_p':'switch.sm_a145r','y_t':'switch.tablet_yulian'}[code] }}"
+                      # CORRECTIE: Entity IDs
+                      target_entity: "{{ {'m_p':'switch.mika_telefoon_family_link','m_t':'switch.mika_tablet_family_link','y_p':'switch.yulian_telefoon_family_link','y_t':'switch.yulian_tablet_family_link'}[code] }}"
                   - action: familylink.add_time_bonus
                     data:
                       entity_id: "{{ target_entity }}"
@@ -282,69 +306,133 @@ automation:
                   message_id: "{{ trigger.event.data.message.message_id }}"
                   chat_id: "{{ current_chat_id }}"
 
+automation:
   # ----------------------------------------------------------------
   # 2. ETENSTIJD KNOP (Alles blokkeren/vrijgeven)
   # ----------------------------------------------------------------
   - id: family_link_dinner_time
     alias: "Family Link: Etenstijd Modus"
+    initial_state: true
+    mode: restart
+    
     variables:
+      # Haal parent IDs uit secrets
       id_parents: !secret telegram_parents
-      # Dynamische chat ID ook hier toepassen
+      # Bepaal naar welke groep we sturen (Test of Family) o.b.v. labels
       id_family: >-
         {%- if 'test' in labels(this.entity_id) | default([], true) -%}
           {{ states('input_text.telegram_chatid_test') }}
         {%- else -%}
           {{ states('input_text.telegram_chatid_family') }}
         {%- endif -%}
-      
+
     trigger:
-      # Generieke triggers om @botnaam filters op te vangen
       - platform: event
         event_type: telegram_command
         id: "lock"
+        event_data:
+          command: "/eten"
       - platform: event
         event_type: telegram_command
         id: "unlock"
-    
+        event_data:
+          command: "/klaar"
+
     condition:
-      # Check 1: Is het een ouder?
+      # Alleen ouders mogen dit commando geven
       - condition: template
         value_template: "{{ trigger.event.data.user_id | int in id_parents }}"
-      # Check 2: Is het bericht in de juiste chat?
+      # Alleen reageren in de juiste chatgroep
       - condition: template
         value_template: "{{ trigger.event.data.chat_id | string == id_family | string }}"
-        
+
     action:
       - choose:
           # --- LOCK (/eten) ---
+          # Doel: BLOKKEREN (Switch AAN = Gesloten/Locked)
           - conditions:
               - condition: trigger
                 id: "lock"
-              # Check op commando /eten (met eventuele suffix)
-              - condition: template
-                value_template: "{{ trigger.event.data.command.split('@')[0] == '/eten' }}"
             sequence:
-              - action: switch.turn_off
+              # 1. Family Link Switches AAN zetten (AAN = Geblokkeerd)
+              - action: switch.turn_on
                 target:
-                  # FIX: Inline lijst
-                  entity_id: [switch.mika_telefoon_toegang, switch.tablet_mika_toegang, switch.yulian_telefoon_toegang, switch.yulian_tablet_toegang, switch.console_nintendo_switch_suspend_software, switch.console_nintendo_switchlite_suspend_software, switch.console_nintendo_switch2_suspend_software]
+                  entity_id: 
+                    - switch.mika_telefoon_family_link
+                    - switch.mika_tablet_family_link
+                    - switch.yulian_telefoon_family_link
+                    - switch.yulian_tablet_family_link
+                    - switch.yulian_tv_family_link
+                    - switch.yulian_chromebook_family_link
+              
+              # 2. Nintendo: Huidige tijd opslaan in geheugen (zodat we het straks kunnen herstellen)
+              - action: input_number.set_value
+                target:
+                  entity_id: input_number.mem_nintendo_switch_limit
+                data:
+                  value: "{{ states('number.console_nintendo_switch_max_screentime_today') | float(0) }}"
+              - action: input_number.set_value
+                target:
+                  entity_id: input_number.mem_nintendo_switch_lite_limit
+                data:
+                  value: "{{ states('number.console_nintendo_switchlite_max_screentime_today') | float(0) }}"
+              - action: input_number.set_value
+                target:
+                  entity_id: input_number.mem_nintendo_switch_2_limit
+                data:
+                  value: "{{ states('number.console_nintendo_switch2_max_screentime_today') | float(0) }}"
+
+              # 3. Nintendo: Tijd op 0 zetten (forceer blokkade via Parental Controls)
+              - action: number.set_value
+                target:
+                  entity_id: 
+                    - number.console_nintendo_switch_max_screentime_today
+                    - number.console_nintendo_switchlite_max_screentime_today
+                    - number.console_nintendo_switch2_max_screentime_today
+                data:
+                  value: 0
+              
+              # 4. Bevestiging sturen
               - action: telegram_bot.send_message
                 data:
                   target: "{{ id_family }}"
-                  message: "🍽️ **Etenstijd!** Alle apparaten (incl. Switches) zijn gepauzeerd. Aan tafel!"
+                  message: "🍽️ **Etenstijd!** Alle apparaten (incl. Switches en Chromebook) zijn gepauzeerd. Aan tafel!"
 
           # --- UNLOCK (/klaar) ---
+          # Doel: VRIJGEVEN (Switch UIT = Beschikbaar/Unlocked)
           - conditions:
               - condition: trigger
                 id: "unlock"
-              # Check op commando /klaar (met eventuele suffix)
-              - condition: template
-                value_template: "{{ trigger.event.data.command.split('@')[0] == '/klaar' }}"
             sequence:
-              - action: switch.turn_on
+              # 1. Family Link Switches UIT zetten (UIT = Beschikbaar)
+              - action: switch.turn_off
                 target:
-                  # FIX: Inline lijst
-                  entity_id: [switch.mika_telefoon_toegang, switch.tablet_mika_toegang, switch.yulian_telefoon_toegang, switch.yulian_tablet_toegang, switch.console_nintendo_switch_suspend_software, switch.console_nintendo_switchlite_suspend_software, switch.console_nintendo_switch2_suspend_software]
+                  entity_id: 
+                    - switch.mika_telefoon_family_link
+                    - switch.mika_tablet_family_link
+                    - switch.yulian_telefoon_family_link
+                    - switch.yulian_tablet_family_link
+                    - switch.yulian_tv_family_link
+                    - switch.yulian_chromebook_family_link
+              
+              # 2. Nintendo: Tijd herstellen vanuit geheugen
+              - action: number.set_value
+                target:
+                  entity_id: number.console_nintendo_switch_max_screentime_today
+                data:
+                  value: "{{ states('input_number.mem_nintendo_switch_limit') | float(0) }}"
+              - action: number.set_value
+                target:
+                  entity_id: number.console_nintendo_switchlite_max_screentime_today
+                data:
+                  value: "{{ states('input_number.mem_nintendo_switch_lite_limit') | float(0) }}"
+              - action: number.set_value
+                target:
+                  entity_id: number.console_nintendo_switch2_max_screentime_today
+                data:
+                  value: "{{ states('input_number.mem_nintendo_switch_2_limit') | float(0) }}"
+              
+              # 3. Bevestiging sturen
               - action: telegram_bot.send_message
                 data:
                   target: "{{ id_family }}"
@@ -381,50 +469,88 @@ automation:
             3. {{ state_attr('sensor.yulian_steenhagen_top_app_3', 'app_name') }}: {{ states('sensor.yulian_steenhagen_top_app_3') | float | round(0) }} min
 
             **Nintendo Switch**
-            - Standaard: {{ states('sensor.switch_used_screen_time_2') }} min (Resterend: {{ states('sensor.switch_screen_time_remaining') }})
-            - Lite: {{ states('sensor.switch_lite_used_screen_time_2') }} min (Resterend: {{ states('sensor.switch_lite_screen_time_remaining') }})
-            - Switch 2: {{ states('sensor.switch_2_used_screen_time_2') }} min (Resterend: {{ states('sensor.switch_2_screen_time_remaining') }})
+            - Standaard: {{ states('sensor.console_nintendo_switch_used_screen_time') }} min (Resterend: {{ states('sensor.console_nintendo_switch_screen_time_remaining') }})
+            - Lite: {{ states('sensor.console_nintendo_switchlite_used_screen_time') }} min (Resterend: {{ states('sensor.console_nintendo_switchlite_screen_time_remaining') }})
+            - Switch 2: {{ states('sensor.console_nintendo_switch2_used_screen_time') }} min (Resterend: {{ states('sensor.console_nintendo_switch2_screen_time_remaining') }})
 
   # ----------------------------------------------------------------
   # 4. NINTENDO SWITCH OCHTEND RESET
   # ----------------------------------------------------------------
   - id: family_link_nintendo_reset
     alias: "Family Link: Nintendo Switch Reset"
-    description: "Reset speellimieten en bedtijden van Switches om 06:00 afhankelijk van de dag."
+    description: "Reset speellimieten (vandaag) en bedtijden (voor morgen) om 06:00."
     trigger:
       - platform: time
         at: "06:00:00"
     action:
+      # -----------------------------------------------------------
+      # STAP 4.1: Haal agenda-info op voor MORGEN (tbv bedtijd)
+      # We checken twee kalenders: Vakanties en Feestdagen
+      # -----------------------------------------------------------
+      - action: calendar.get_events
+        target:
+          entity_id: calendar.ical_vakantie
+        data:
+          start_date_time: "{{ (now() + timedelta(days=1)).strftime('%Y-%m-%d 00:00:00') }}"
+          end_date_time: "{{ (now() + timedelta(days=1)).strftime('%Y-%m-%d 23:59:59') }}"
+        response_variable: agenda_vakantie_morgen
+
+      - action: calendar.get_events
+        target:
+          entity_id: calendar.nederland
+        data:
+          start_date_time: "{{ (now() + timedelta(days=1)).strftime('%Y-%m-%d 00:00:00') }}"
+          end_date_time: "{{ (now() + timedelta(days=1)).strftime('%Y-%m-%d 23:59:59') }}"
+        response_variable: agenda_feestdag_morgen
+
+      # -----------------------------------------------------------
+      # STAP 4.2: SPEELTIJD (Gebaseerd op VANDAAG via sensor)
+      # -----------------------------------------------------------
       - choose:
-          # --- WEEKEND (Za/Zo) ---
+          # Als VANDAAG vrij is -> 4 uur (240 min)
           - conditions:
-              - condition: time
-                weekday:
-                  - sat
-                  - sun
+              - condition: state
+                entity_id: binary_sensor.status_vrij_vakantie_of_weekend
+                state: "on"
             sequence:
-              # 3 Uur (180 min) speeltijd
               - action: number.set_value
                 target:
                   entity_id: [number.console_nintendo_switch_max_screentime_today, number.console_nintendo_switchlite_max_screentime_today, number.console_nintendo_switch2_max_screentime_today]
                 data:
-                  value: 180
-              # Eindtijd 20:00
-              - action: time.set_value
-                target:
-                  entity_id: [time.console_nintendo_switch_bedtime_alarm, time.console_nintendo_switchlite_bedtime_alarm, time.console_nintendo_switch2_bedtime_alarm]
-                data:
-                  time: "20:00:00"
-
-        # --- WEEKDAG (Ma-Vr) ---
+                  value: 240
         default:
-          # 2 Uur (120 min) speeltijd
+          # Anders -> 2 uur (120 min)
           - action: number.set_value
             target:
               entity_id: [number.console_nintendo_switch_max_screentime_today, number.console_nintendo_switchlite_max_screentime_today, number.console_nintendo_switch2_max_screentime_today]
             data:
               value: 120
-          # Eindtijd 19:00
+
+      # -----------------------------------------------------------
+      # STAP 4.3: BEDTIJD (Gebaseerd op MORGEN)
+      # -----------------------------------------------------------
+      - choose:
+          - conditions:
+              - condition: or
+                conditions:
+                  # A: Vandaag is Vrijdag (4) of Zaterdag (5) -> Morgen is weekend
+                  - condition: template
+                    value_template: "{{ now().weekday() in [4, 5] }}"
+                  # B: Er staat voor morgen iets in de vakantiekalender
+                  - condition: template
+                    value_template: "{{ agenda_vakantie_morgen['calendar.ical_vakantie'].events | count > 0 }}"
+                  # C: Er staat voor morgen iets in de feestdagenkalender
+                  - condition: template
+                    value_template: "{{ agenda_feestdag_morgen['calendar.nederland'].events | count > 0 }}"
+            sequence:
+              # Morgen vrij/weekend -> Late bedtijd (21:00)
+              - action: time.set_value
+                target:
+                  entity_id: [time.console_nintendo_switch_bedtime_alarm, time.console_nintendo_switchlite_bedtime_alarm, time.console_nintendo_switch2_bedtime_alarm]
+                data:
+                  time: "21:00:00"
+        default:
+          # Morgen school/werk -> Vroege bedtijd (19:00)
           - action: time.set_value
             target:
               entity_id: [time.console_nintendo_switch_bedtime_alarm, time.console_nintendo_switchlite_bedtime_alarm, time.console_nintendo_switch2_bedtime_alarm]
