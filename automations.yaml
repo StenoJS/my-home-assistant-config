@@ -25,7 +25,7 @@
     entity_id: 760fb7f691ec7a5a23f62d5dfd35f854
     domain: sensor
     trigger: device
-    above: 70
+    above: 80
     for:
       hours: 0
       minutes: 2
@@ -318,7 +318,7 @@
     data:
       cache: true
       message: De droger is klaar met drogen, veel plezier met uitpakken en opruimen....
-      media_player_entity_id: media_player.huis_2
+      media_player_entity_id: media_player.huis
     target:
       device_id: ae4f80b8aade1f304ae2d88f2f17404b
   - action: notify.telegram_family
@@ -413,7 +413,9 @@
       media_type: playlist
       media_id: Disney Hits NL
     target:
-      device_id: a7496df81cb4a3081783686dc4d5e64f
+      device_id:
+      - a7496df81cb4a3081783686dc4d5e64f
+      - de297d5fed570c2ef7839fe46b88596b
   mode: single
 - id: '1760982959816'
   alias: Start Live Locatie naar Tim voor Bridge
@@ -634,140 +636,64 @@
   description: Leest de naam van de gebruiker die een specifieke tag scant en stuurt
     Telegram bericht.
   triggers:
-  - event_type: tag_scanned
+  - trigger: event
+    event_type: tag_scanned
     event_data:
       tag_id: 8f763d16-01f9-4eac-b289-3f55b8d59ef9
-    trigger: event
-  conditions: []
   actions:
   - variables:
       user_id: '{{ trigger.event.context.user_id }}'
-      user_entity: '{% set user_name = user_id | default(''onbekende_gebruiker'',
-        true) | replace(''-'', ''_'') %} {{ states.person | selectattr(''attributes.user_id'',
-        ''eq'', user_id) | map(attribute=''entity_id'') | first }}
+      friendly_user_name: '{% set person = states.person | selectattr(''attributes.user_id'',
+        ''eq'', user_id) | first | default(none) %} {{ person.attributes.friendly_name
+        if person else ''Iemand'' }}
 
         '
-      fallback_name: '{{ states.user | selectattr(''id'', ''eq'', user_id) | map(attribute=''attributes.friendly_name'')
-        | first }}'
-      friendly_user_name: "{% if user_entity %}\n  {{ state_attr(user_entity, 'friendly_name')
-        }}\n{% elif fallback_name %}\n  {{ fallback_name }}\n{% else %}\n  iemand\n{%
-        endif %}\n"
-  - data:
+  - action: script.send_telegram_message
+    data:
       message_text: "\U0001F7E2 Tag 'Test wit' succesvol gescand door {{ friendly_user_name
         }}."
       user_name: '{{ friendly_user_name }}'
-    action: script.send_telegram_message
   - action: tts.speak
+    target:
+      entity_id: media_player.keuken
     data:
       media_player_entity_id: media_player.keuken
       message: Welterusten {{ friendly_user_name }}, slaap lekker en tot morgen!
-    target:
-      entity_id: media_player.keuken
   mode: single
-- id: '1761820155247'
-  alias: Wijzig Energietarief
-  description: Stelt de helpers voor gas en stroom (hoog/laag) in op basis van de
-    geplande tariefperiodes en correcte belasting (alles excl. BTW).
-  triggers:
-  - at: 00:05:00
-    trigger: time
-    enabled: true
-  conditions: []
-  actions:
-  - variables:
-      btw_factor: 1.21
-      basisprijs_gas: 0.5095
-      korting_2024: 0.25
-      korting_2025: 0.35
-      belasting_gas_2024_ex: 0.54013
-      belasting_gas_2025_ex: 0.5781
-      belasting_gas_2026_ex: 0.60058
-      basisprijs_stroom_laag: 0.1189
-      basisprijs_stroom_hoog: 0.1315
-      belasting_stroom_2024_ex: 0.1088
-      belasting_stroom_2025_ex: 0.10154
-      belasting_stroom_2026_ex: 0.09157
-      korting_perc: "{% set korting = korting_2024 %}  {% if now().date() >= (strptime('2025-11-01',
-        '%Y-%m-%d').date()) %}\n  {% set korting = korting_2025 %}\n{% endif %}  {{
-        korting }}\n"
-      energiebelasting_gas: "{% set belasting = belasting_gas_2024_ex %}  {% if now().date()
-        >= (strptime('2026-01-01', '%Y-%m-%d').date()) %}\n  {% set belasting = belasting_gas_2026_ex
-        %}\n{% elif now().date() >= (strptime('2025-01-01', '%Y-%m-%d').date()) %}\n
-        \ {% set belasting = belasting_gas_2025_ex %}\n{% endif %}  {{ belasting }}\n"
-      energiebelasting_stroom: "{% set belasting = belasting_stroom_2024_ex %}  {%
-        if now().date() >= (strptime('2025-01-01', '%Y-%m-%d').date()) %}\n  {% set
-        belasting = belasting_stroom_2025_ex %}\n{% endif %}  {{ belasting }}\n"
-  - target:
-      entity_id: input_number.gas_tarief
-    data:
-      value: '{% set prijs_na_korting_ex_btw = basisprijs_gas * (1 - korting_perc
-        | float) %} {% set prijs_voor_btw = prijs_na_korting_ex_btw + energiebelasting_gas
-        | float %} {% set eindprijs = prijs_voor_btw * btw_factor %} {{ eindprijs
-        | round(5) }}
-
-        '
-    action: input_number.set_value
-  - target:
-      entity_id: input_number.kwh_tarief_laag
-    data:
-      value: '{% set prijs_na_korting_ex_btw = basisprijs_stroom_laag * (1 - korting_perc
-        | float) %} {% set prijs_voor_btw = prijs_na_korting_ex_btw + energiebelasting_stroom
-        | float %} {% set eindprijs = prijs_voor_btw * btw_factor %} {{ eindprijs
-        | round(5) }}
-
-        '
-    action: input_number.set_value
-  - target:
-      entity_id: input_number.kwh_tarief_hoog
-    data:
-      value: '{% set prijs_na_korting_ex_btw = basisprijs_stroom_hoog * (1 - korting_perc
-        | float) %} {% set prijs_voor_btw = prijs_na_korting_ex_btw + energiebelasting_stroom
-        | float %} {% set eindprijs = prijs_voor_btw * btw_factor %} {{ eindprijs
-        | round(5) }}
-
-        '
-    action: input_number.set_value
 - id: '1761990153065'
   alias: Wasmachine
-  description: ''
+  description: Stuurt een melding wanneer de wasmachine klaar is.
   triggers:
-  - type: power
+  - trigger: device
     device_id: 0159c4f4eb00ecf043dddfb711c322df
-    entity_id: 065321b2419d8d8334ddd22c0b2fd893
     domain: sensor
-    trigger: device
+    entity_id: 065321b2419d8d8334ddd22c0b2fd893
+    type: power
     above: 9
     for:
-      hours: 0
-      minutes: 0
       seconds: 15
-  conditions: []
   actions:
   - action: notify.mobile_app_jeroen_telefoon
-    metadata: {}
     data:
       message: Wasmachine aan gezet
   - wait_for_trigger:
-    - type: power
+    - trigger: device
       device_id: 0159c4f4eb00ecf043dddfb711c322df
-      entity_id: 065321b2419d8d8334ddd22c0b2fd893
       domain: sensor
-      trigger: device
+      entity_id: 065321b2419d8d8334ddd22c0b2fd893
+      type: power
       below: 0.1
       for:
-        hours: 0
         minutes: 2
-        seconds: 0
   - action: notify.send_message
-    metadata: {}
     target:
       entity_id: notify.telegram_thuisapp
     data:
       title: Wasmachine
       message: De wasmachine is klaar met wassen.
   - action: notify.mobile_app_linda_telefoon
-    metadata: {}
-    data: {}
+    data:
+      message: De wasmachine is klaar met wassen.
   mode: single
 - id: eetkamer_licht_thuiskomst_combined
   alias: Eetkamer Licht aan bij Donkere Thuiskomst (Verbeterd)
@@ -790,13 +716,31 @@
       > 120 }}
 
       '
+  - condition: device
+    type: is_off
+    device_id: 5f8e04cf7a18c6d6bcfc8fb711760c99
+    entity_id: fa060099b9f3cce702a11dc190b7530a
+    domain: light
   - condition: numeric_state
     entity_id: zone.home
     above: 0
+    enabled: false
   actions:
   - action: light.turn_on
     target:
       entity_id: light.eetkamer_hanglamp_3
+  - delay:
+      hours: 0
+      minutes: 15
+      seconds: 0
+      milliseconds: 0
+    enabled: false
+  - action: light.turn_off
+    metadata: {}
+    target:
+      entity_id: light.eetkamer_hanglamp_3
+    data: {}
+    enabled: false
   mode: single
 - id: '1763327431528'
   alias: Verwarming serre uit
@@ -871,7 +815,7 @@
   description: ''
   triggers:
   - trigger: time
-    at: '19:30:00'
+    at: '19:59:00'
     weekday:
     - sun
     - fri
@@ -879,6 +823,7 @@
     - wed
     - tue
     - mon
+    - sat
   conditions:
   - condition: numeric_state
     entity_id: weather.forecast_thuis
@@ -895,3 +840,48 @@
       message: Bedverwarming Yulian aangezet
       title: "\U0001F6CC\U0001F3FC Bedverwarming"
   mode: single
+- id: '1769614519355'
+  alias: 'Test Matter Knop: Eettafel 5'
+  description: Schakel Eettafel 5 met de BILRESA Knop 1 via State Trigger
+  triggers:
+  - entity_id: event.bilresa_dual_button_knop_1
+    trigger: state
+  actions:
+  - action: light.toggle
+    target:
+      entity_id: light.eetkamer_hanglamp_5
+    data: {}
+  mode: restart
+- id: '1769938287333'
+  alias: Ventilator badkamer uit na x tijd
+  description: ''
+  triggers:
+  - type: changed_states
+    device_id: b399cd951f44afcc2ed2f8208babc7f0
+    entity_id: 933172b9479cb53c41aebb00bb280509
+    domain: switch
+    trigger: device
+    for:
+      hours: 1
+      minutes: 30
+      seconds: 0
+  conditions: []
+  actions:
+  - type: turn_off
+    device_id: b399cd951f44afcc2ed2f8208babc7f0
+    entity_id: 933172b9479cb53c41aebb00bb280509
+    domain: switch
+  mode: single
+- id: '1769943409482'
+  alias: "\U0001F6BD\U0001F4A1 Smart Bathroom Occupancy Light Control"
+  description: ''
+  use_blueprint:
+    path: muratcesmecioglu/smart-bathroom.yaml
+    input:
+      motion_sensor: binary_sensor.myggspray_wrlss_mtn_sensor_bezetting
+      door_sensor: binary_sensor.myggbett_door_window_sensor_deur
+      light_switch: light.eetkamer_hanglamp_5
+      occupancy_helper: input_boolean.wc_bezet
+      entering_helper: input_boolean.wc_binnengegaan
+      entered_helper: input_boolean.wc_bezet_2
+      exiting_helper: input_boolean.wc_uitgegaan

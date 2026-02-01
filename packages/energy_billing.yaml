@@ -1,8 +1,93 @@
 # Package voor het bijhouden van het afrekenjaar (21 april t/m 20 april)
 # Onderscheid tussen Piek- en Daltarief voor nauwkeurige vergelijking met de jaarafrekening.
 
+automation:
+  - id: '1761820155247'
+    alias: Wijzig Energietarief
+    description: Stelt de helpers voor gas en stroom (hoog/laag) in op basis van officiële belastingen en leveranciersdata.
+    triggers:
+      - trigger: time
+        at: "00:05:00"
+    actions:
+      - variables:
+          btw_factor: 1.21
+          vaste_klanten_korting: 0.075 # 7,5%
+          
+          # Basisprijzen gebaseerd op terugrekening van leveranciers-totaal
+          basisprijs_gas: 0.5095
+          basisprijs_stroom_hoog: 0.14217
+          basisprijs_stroom_laag: 0.12855
+          
+          # Officiële belastingtarieven (excl. BTW) uit jouw tabel
+          belasting_gas_2026_ex: 0.60066
+          belasting_gas_2025_ex: 0.57816
+          belasting_gas_2024_ex: 0.58301
+          
+          belasting_stroom_2026_ex: 0.09161
+          belasting_stroom_2025_ex: 0.10154
+          belasting_stroom_2024_ex: 0.10880
+
+          korting_2024: 0.25
+          korting_2025: 0.35
+          korting_2026: 0.35
+
+          # Logica voor juiste korting en belasting op basis van datum
+          korting_perc: >
+            {% set d = now().date() %}
+            {% if d >= strptime('2025-11-01', '%Y-%m-%d').date() %}
+              {{ korting_2025 }}
+            {% else %}
+              {{ korting_2024 }}
+            {% endif %}
+
+          energiebelasting_gas: >
+            {% set d = now().date() %}
+            {% if d >= strptime('2026-01-01', '%Y-%m-%d').date() %}
+              {{ belasting_gas_2026_ex }}
+            {% elif d >= strptime('2025-01-01', '%Y-%m-%d').date() %}
+              {{ belasting_gas_2025_ex }}
+            {% else %}
+              {{ belasting_gas_2024_ex }}
+            {% endif %}
+
+          energiebelasting_stroom: >
+            {% set d = now().date() %}
+            {% if d >= strptime('2026-01-01', '%Y-%m-%d').date() %}
+              {{ belasting_stroom_2026_ex }}
+            {% elif d >= strptime('2025-01-01', '%Y-%m-%d').date() %}
+              {{ belasting_stroom_2025_ex }}
+            {% else %}
+              {{ belasting_stroom_2024_ex }}
+            {% endif %}
+
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.gas_tarief
+        data:
+          value: >
+            {% set prijs_na_korting = basisprijs_gas * (1 - korting_perc | float) %}
+            {{ ((prijs_na_korting + energiebelasting_gas | float) * btw_factor) | round(5) }}
+
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.kwh_tarief_laag
+        data:
+          value: >
+            {% set kale_prijs_met_vaste_korting = basisprijs_stroom_laag * (1 - vaste_klanten_korting) %}
+            {% set prijs_na_overige_korting = kale_prijs_met_vaste_korting * (1 - korting_perc | float) %}
+            {{ ((prijs_na_overige_korting + energiebelasting_stroom | float) * btw_factor) | round(5) }}
+
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.kwh_tarief_hoog
+        data:
+          value: >
+            {% set kale_prijs_met_vaste_korting = basisprijs_stroom_hoog * (1 - vaste_klanten_korting) %}
+            {% set prijs_na_overige_korting = kale_prijs_met_vaste_korting * (1 - korting_perc | float) %}
+            {{ ((prijs_na_overige_korting + energiebelasting_stroom | float) * btw_factor) | round(5) }}
+
 utility_meter:
-  # --- IMPORT (Levering) ---
+  # --- AFREKENJAAR (Reset op 21 april) ---
   afrekenjaar_import_dal:
     source: sensor.p1_meter_energie_import_tarief_1
     name: "Jaarverbruik Dal (Import)"
@@ -18,22 +103,6 @@ utility_meter:
     name: "Jaarverbruik Totaal (Import)"
     cron: "0 0 21 4 *"
 
-  kalenderjaar_import_dal:
-    source: sensor.p1_meter_energie_import_tarief_1
-    name: "Jaarverbruik Dal (Import)"
-    cycle: yearly
-
-  kalenderjaar_import_piek:
-    source: sensor.p1_meter_energie_import_tarief_2
-    name: "Jaarverbruik Piek (Import)"
-    cycle: yearly
-
-  kalenderjaar_import_totaal:
-    source: sensor.p1_meter_energy_import
-    name: "Jaarverbruik Totaal (Import)"
-    cycle: yearly
-
-  # --- EXPORT (Teruglevering) ---
   afrekenjaar_export_dal:
     source: sensor.p1_meter_energie_export_tarief_1
     name: "Jaarteruglevering Dal (Export)"
@@ -49,42 +118,39 @@ utility_meter:
     name: "Jaarteruglevering Totaal (Export)"
     cron: "0 0 21 4 *"
 
-  # --- GAS ---
   afrekenjaar_gas:
     source: sensor.gas_meter_gas
     name: "Jaarverbruik Gas"
     cron: "0 0 21 4 *"
 
+  # --- KALENDERJAAR (Reset op 1 januari) ---
+  kalenderjaar_import_dal:
+    source: sensor.p1_meter_energie_import_tarief_1
+    name: "Jaarverbruik Dal Kalender (Import)"
+    cycle: yearly
+
   kalenderjaar_gas:
     source: sensor.gas_meter_gas
-    name: "Jaarverbruik Gas"
+    name: "Jaarverbruik Gas Kalender"
     cycle: yearly
 
-# Opgewekte energie jaarlijkse en maandelijkse totalen
-  # Jaartotaal van 1-1 tot 31-12
   energy_production_yearly:
-    source: sensorsensor.solaredge_geproduceerde_energie # VERVANG DOOR JE BRON
-    name: Energie Productie Jaartotaal
+    source: sensor.solaredge_geproduceerde_energie
+    name: "Energie Productie Jaartotaal"
     cycle: yearly
-    
-  # Maandtotaal (reset op de 1e van de maand)
+
   energy_production_monthly:
-    source: sensor.solaredge_geproduceerde_energie # VERVANG DOOR JE BRON
-    name: Energie Productie Maandtotaal
+    source: sensor.solaredge_geproduceerde_energie
+    name: "Energie Productie Maandtotaal"
     cycle: monthly
 
-# Dagtotaal (reset elke dag)
   energy_production_daily:
-    source: sensor.solaredge_geproduceerde_energie # VERVANG DOOR JE BRON
-    name: Energie Productie Dagtotaal
+    source: sensor.solaredge_geproduceerde_energie
+    name: "Energie Productie Dagtotaal"
     cycle: daily
-
-# Optioneel: SQL sensoren of template sensoren zijn niet nodig omdat 
-# Utility Meter de waarde van de 'vorige' periode bewaart in de attributen.
 
 template:
   - sensor:
-      # --- NETTO BEREKENINGEN (Import - Export per tarief) ---
       - name: "Afrekenjaar Netto Dal"
         unique_id: afrekenjaar_netto_dal
         unit_of_measurement: "kWh"

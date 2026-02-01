@@ -6,6 +6,18 @@
 #################################################################
 
 # ----------------------------------------------------------------
+# NIEUW: Sensor om TV kijktijd bij te houden
+# ----------------------------------------------------------------
+sensor:
+  - platform: history_stats
+    name: "TV Serre Kijktijd Vandaag"
+    # LET OP: Controleer of dit de juiste entiteit is van je LG TV!
+    entity_id: media_player.serre_televisie
+    state: "on"
+    type: time
+    start: "{{ today_at('00:00') }}"
+    end: "{{ now() }}"
+# ----------------------------------------------------------------
 # NIEUW: Geheugen voor Nintendo Switch Limieten
 # Deze zijn nodig om de oude tijd te onthouden tijdens het eten.
 # ----------------------------------------------------------------
@@ -458,6 +470,8 @@ automation:
           message: >
             📊 **Schermtijd Vandaag**
             
+            📺 **TV Serre:** {{ (states('sensor.tv_serre_kijktijd_vandaag') | float(0) * 60) | round(0) }} min
+            
             **Mika (Totaal: {{ states('sensor.mika_steenhagen_screen_time_formatted') }})**
             1. {{ state_attr('sensor.mika_steenhagen_top_app_1', 'app_name') }}: {{ states('sensor.mika_steenhagen_top_app_1') | float | round(0) }} min
             2. {{ state_attr('sensor.mika_steenhagen_top_app_2', 'app_name') }}: {{ states('sensor.mika_steenhagen_top_app_2') | float | round(0) }} min
@@ -467,7 +481,6 @@ automation:
             1. {{ state_attr('sensor.yulian_steenhagen_top_app_1', 'app_name') }}: {{ states('sensor.yulian_steenhagen_top_app_1') | float | round(0) }} min
             2. {{ state_attr('sensor.yulian_steenhagen_top_app_2', 'app_name') }}: {{ states('sensor.yulian_steenhagen_top_app_2') | float | round(0) }} min
             3. {{ state_attr('sensor.yulian_steenhagen_top_app_3', 'app_name') }}: {{ states('sensor.yulian_steenhagen_top_app_3') | float | round(0) }} min
-
             **Nintendo Switch**
             - Standaard: {{ states('sensor.console_nintendo_switch_used_screen_time') }} min (Resterend: {{ states('sensor.console_nintendo_switch_screen_time_remaining') }})
             - Lite: {{ states('sensor.console_nintendo_switchlite_used_screen_time') }} min (Resterend: {{ states('sensor.console_nintendo_switchlite_screen_time_remaining') }})

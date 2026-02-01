@@ -1,13 +1,14 @@
+# Telegram Bot Configuratie - Dict format voorkomt de 'expected a dict' fout
 telegram_bot:
-  - platform: polling
-    api_key: !secret telegram_api_key
-    allowed_chat_ids:
-      - !secret telegram_chatid_family
-      - !secret telegram_chatid_test
-      - !secret telegram_id_jeroen
-      - !secret telegram_id_mika
-      - !secret telegram_id_yulian
-      - !secret telegram_id_linda
+  platform: polling
+  api_key: !secret telegram_api_key
+  allowed_chat_ids:
+    - !secret telegram_chatid_family
+    - !secret telegram_chatid_test
+    - !secret telegram_id_jeroen
+    - !secret telegram_id_mika
+    - !secret telegram_id_yulian
+    - !secret telegram_id_linda
 
 automation:
   # ----------------------------------------------------------------------------
@@ -16,11 +17,11 @@ automation:
   - alias: "Telegram - Toon Huis Menu"
     id: "telegram_main_menu"
     trigger:
-      - platform: event
+      - trigger: event
         event_type: telegram_command
         event_data:
           command: "/menu"
-      - platform: event
+      - trigger: event
         event_type: telegram_command
         event_data:
           command: "/start"
@@ -37,19 +38,19 @@ automation:
             - "📊 Status:/status, 🎬 Scenes:/scenes"
 
   # ----------------------------------------------------------------------------
-  # 2. LOGICA & ACTIES
+  # 2. LOGICA & ACTIES (Callback Handler)
   # ----------------------------------------------------------------------------
   - alias: "Telegram - Callback Handler"
     id: "telegram_callback_handler"
     trigger:
-      - platform: event
+      - trigger: event
         event_type: telegram_callback
     action:
-      # Directe feedback om 'loading' icoon te stoppen
+      # Stop de 'loading' spinner direct
       - action: telegram_bot.answer_callback_query
         data:
           callback_query_id: "{{ trigger.event.data.id }}"
-          message: "Verwerken..."
+          message: "Laden..."
 
       - variables:
           parts: "{{ trigger.event.data.data.split(':') }}"
@@ -63,11 +64,10 @@ automation:
             sequence:
               - variables:
                   rooms: >
-                    {% if target == 'Zolder' %} ['Zolder']
-                    {% elif target == '1e Verdieping' %} ['Slaapkamer', 'Kantoor', 'Slaapkamer Yulian']
-                    {% elif target == 'Begane Grond' %} ['Woonkamer', 'Eetkamer', 'Serre', 'Keuken', 'Schuur']
+                    {% if target == 'Zolder' %} ['Mika', 'Overloop', 'Bergruimte']
+                    {% elif target == '1e Verdieping' %} ['Slaapkamer', 'Kantoor', 'Yulian', 'Badkamer']
+                    {% elif target == 'Begane Grond' %} ['Woonkamer', 'Eetkamer', 'Serre', 'Keuken', 'Schuur', 'Hal']
                     {% else %} [] {% endif %}
-              
               - action: telegram_bot.edit_message
                 data:
                   chat_id: "{{ trigger.event.data.chat_id }}"
@@ -81,19 +81,18 @@ automation:
                     {% endfor %}
                     {{ ns.buttons + ["🔙 Terug:/menu_cmd"] }}
 
-          # --- STAP 2: KIES APPARAAT (Dynamisch) ---
+          # --- STAP 2: KIES APPARAAT ---
           - conditions: "{{ cmd == '/r' }}"
             sequence:
               - variables:
                   entities: "{{ area_entities(target) or area_entities(target|lower|replace(' ','_')) }}"
-              
               - if: "{{ entities == none or entities | count == 0 }}"
                 then:
                   - action: telegram_bot.edit_message
                     data:
                       chat_id: "{{ trigger.event.data.chat_id }}"
                       message_id: "{{ trigger.event.data.message.message_id }}"
-                      message: "⚠️ Geen apparaten in '{{ target }}'."
+                      message: "⚠️ Geen apparaten gevonden in '{{ target }}'."
                       inline_keyboard: ["🔙 Terug:/f:{{ extra }}"]
                 else:
                   - action: telegram_bot.edit_message
@@ -104,39 +103,14 @@ automation:
                       message: "Bediening:"
                       inline_keyboard: >
                         {% set ns = namespace(buttons=[]) %}
-                        {# Filter en sorteer apparaten #}
                         {% set devs = expand(entities) 
-                           | selectattr('domain', 'in', ['light','switch','media_player','cover','lock']) 
-                           | sort(attribute='name') %}
-                        
+                            | selectattr('domain', 'in', ['light','switch','media_player','cover','lock']) 
+                            | sort(attribute='name') %}
                         {% for dev in devs %}
-                          {% set icon = '🟡' if dev.state == 'on' else '⚫' %}
-                          
-                          {# --- COVER LOGICA (ROLLUIKEN) --- #}
-                          {# Hier strippen we de naam en tonen we alleen status #}
-                          {% if 'cover' in dev.entity_id %}
-                            {% if dev.state == 'open' %}
-                               {% set label = '🪟 Open' %}
-                            {% elif dev.state == 'closed' %}
-                               {% set label = '🌚 Dicht' %}
-                            {% else %}
-                               {% set label = '⏳ ' ~ dev.state %}
-                            {% endif %}
-                          
-                          {# --- SLOTEN --- #}
-                          {% elif 'lock' in dev.entity_id %}
-                             {% set icon = '🔒' if dev.state == 'locked' else '🔓' %}
-                             {% set label = icon ~ " " ~ dev.name %}
-
-                          {# --- OVERIGE (Lampen etc) --- #}
-                          {% else %}
-                             {% set label = icon ~ " " ~ dev.name %}
-                          {% endif %}
-                          
-                          {# Knop toevoegen #}
-                          {% set ns.buttons = ns.buttons + [label ~ ":/t:" ~ dev.entity_id ~ ":" ~ target] %}
+                          {% set icon = '🟡' if dev.state in ['on','open','unlocked'] else '⚫' %}
+                          {% set label = icon ~ " " ~ dev.name %}
+                          {% set ns.buttons = ns.buttons + [label ~ ":/t:" ~ dev.entity_id ~ ":" ~ target ~ ":" ~ extra] %}
                         {% endfor %}
-                        
                         {{ ns.buttons + ["🔙 Terug:/f:" ~ extra, "🏠 Menu:/menu_cmd"] }}
 
           # --- STAP 3: TOGGLE ACTIE ---
@@ -145,44 +119,26 @@ automation:
               - action: homeassistant.toggle
                 target:
                   entity_id: "{{ target }}"
-              - delay: "00:00:01" 
-              
-              # Menu verversen (Exacte kopie van logica hierboven)
+              - delay: "00:00:01"
               - action: telegram_bot.edit_message
                 data:
                   chat_id: "{{ trigger.event.data.chat_id }}"
                   message_id: "{{ trigger.event.data.message.message_id }}"
-                  message: "Status bijgewerkt:"
+                  message: "Status bijgewerkt voor {{ state_attr(target, 'friendly_name') or 'apparaat' }}:"
                   inline_keyboard: >
-                    {% set entities = area_entities(extra) or area_entities(extra|lower|replace(' ','_')) %}
+                    {% set room_name = extra %}
+                    {% set floor_name = parts[3] if parts|length > 3 else '' %}
+                    {% set entities = area_entities(room_name) or area_entities(room_name|lower|replace(' ','_')) %}
                     {% set ns = namespace(buttons=[]) %}
-                    {% set devs = expand(entities) 
-                           | selectattr('domain', 'in', ['light','switch','media_player','cover','lock']) 
-                           | sort(attribute='name') %}
-
+                    {% set devs = expand(entities) | selectattr('domain', 'in', ['light','switch','media_player','cover','lock']) | sort(attribute='name') %}
                     {% for dev in devs %}
-                          {% set icon = '🟡' if dev.state == 'on' else '⚫' %}
-                          
-                          {% if 'cover' in dev.entity_id %}
-                            {% if dev.state == 'open' %}
-                               {% set label = '🪟 Open' %}
-                            {% elif dev.state == 'closed' %}
-                               {% set label = '🌚 Dicht' %}
-                            {% else %}
-                               {% set label = '⏳ ' ~ dev.state %}
-                            {% endif %}
-                          {% elif 'lock' in dev.entity_id %}
-                             {% set icon = '🔒' if dev.state == 'locked' else '🔓' %}
-                             {% set label = icon ~ " " ~ dev.name %}
-                          {% else %}
-                             {% set label = icon ~ " " ~ dev.name %}
-                          {% endif %}
-                          
-                          {% set ns.buttons = ns.buttons + [label ~ ":/t:" ~ dev.entity_id ~ ":" ~ extra] %}
+                      {% set icon = '🟡' if dev.state in ['on','open','unlocked'] else '⚫' %}
+                      {% set label = icon ~ " " ~ dev.name %}
+                      {% set ns.buttons = ns.buttons + [label ~ ":/t:" ~ dev.entity_id ~ ":" ~ room_name ~ ":" ~ floor_name] %}
                     {% endfor %}
-                    {{ ns.buttons + ["🔙 Terug:/f:Begane Grond", "🏠 Menu:/menu_cmd"] }}
+                    {{ ns.buttons + ["🔙 Terug:/f:" ~ floor_name, "🏠 Hoofdmenu:/menu_cmd"] }}
 
-          # --- NAVIGATIE & HULP ---
+          # --- NAVIGATIE COMMANDS ---
           - conditions: "{{ cmd == '/menu_cmd' }}"
             sequence:
               - action: telegram_bot.edit_message
@@ -196,7 +152,7 @@ automation:
                     - "🛏️ 1e Verdieping:/f:1e Verdieping"
                     - "🛋️ Begane Grond:/f:Begane Grond"
                     - "📊 Status:/status, 🎬 Scenes:/scenes"
-          
+
           - conditions: "{{ cmd == '/status' }}"
             sequence:
               - action: telegram_bot.edit_message
@@ -204,7 +160,7 @@ automation:
                   chat_id: "{{ trigger.event.data.chat_id }}"
                   message_id: "{{ trigger.event.data.message.message_id }}"
                   message: "🌡️ Woonkamer: {{ states('sensor.thuis_temperatuur') }}°C"
-                  inline_keyboard: ["🔙:/menu_cmd"]
+                  inline_keyboard: ["🔙 Terug:/menu_cmd"]
 
           - conditions: "{{ cmd == '/scenes' }}"
             sequence:
@@ -215,21 +171,15 @@ automation:
                   message: "Scenes:"
                   inline_keyboard:
                     - "😴 Jeroen Slaapt:/call:automation.trigger:automation.jeroen_slaapt"
-                    - "🔙:/menu_cmd"
-
-          - conditions: "{{ cmd == '/call' }}"
-            sequence:
-               - action: "{{ target }}"
-                 target:
-                   entity_id: "{{ extra }}"
+                    - "🔙 Terug:/menu_cmd"
 
   # ----------------------------------------------------------------------------
-  # 3. ASSIST AI (Fallback voor getypte tekst)
+  # 3. ASSIST AI (Fallback voor tekst)
   # ----------------------------------------------------------------------------
   - alias: "Telegram - Assist AI"
     id: "telegram_assist_ai"
     trigger:
-      - platform: event
+      - trigger: event
         event_type: telegram_text
     condition:
       - condition: template
