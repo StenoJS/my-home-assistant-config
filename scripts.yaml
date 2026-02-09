@@ -9,50 +9,45 @@ cast_dashboard_keuken:
   alias: Cast dashboard-keuken
   description: ''
 jeroen_naar_boven:
-  alias: "Jeroen gaat naar boven"
+  alias: Jeroen gaat naar boven
   icon: mdi:stairs-up
-  description: "Routine voor het naar boven gaan: Begane grond uit, kantoor aan, muziek starten."
+  description: 'Routine voor het naar boven gaan: Begane grond uit, kantoor aan, muziek
+    starten.'
   sequence:
-    # 1. Alle verlichting op de begane grond uit (met een korte fade-out)
-    - action: light.turn_off
-      target:
-        floor_id: begane_grond
-      data:
-        transition: 3
-
-    # 2. Specifieke media-apparaten op de begane grond uitschakelen
-    # 'continue_on_error' zorgt ervoor dat het script doorgaat als een TV al uit (of onbereikbaar) is.
-    - action: media_player.turn_off
-      target:
-        entity_id:
-          - media_player.tv_woonkamer
-          - media_player.sony_xr_65a80j
-          - media_player.lg_webos_tv_oled55cx9la
-          - media_player.keuken
-          - media_player.woonkamer_voor
-          - media_player.eetkamer
-          - media_player.begane_grond
-      continue_on_error: true
-
-    # 3. Lamp kantoor aan
-    - action: light.turn_on
-      target:
-        entity_id: light.lamp_kantoor
-    # 4. Shuffle aanzetten op de Nest Hub Kantoor
-    - action: media_player.shuffle_set
-      target:
-        entity_id: media_player.nesthub7b28
-      data:
-        shuffle: true
-        
-    # 5. Muziek afspelen via Music Assistant op Nest Hub Kantoor
-    - action: music_assistant.play_media
-      target:
-        entity_id: media_player.nesthub7b28
-      data:
-        media_type: playlist
-        media_id: "Bedtijd Jeroen"
-        enqueue: replace
+  - action: light.turn_off
+    target:
+      floor_id: begane_grond
+    data:
+      transition: 3
+  - action: media_player.turn_off
+    target:
+      entity_id:
+      - media_player.tv_woonkamer
+      - media_player.keuken
+      - media_player.eetkamer
+      - media_player.begane_grond
+      - media_player.tv_woonkamer_2
+      - media_player.googletv_2
+      - media_player.woonkamer
+      - media_player.televisie
+    continue_on_error: true
+    data: {}
+  - action: light.turn_on
+    data: {}
+    target:
+      entity_id: light.kantoor_plafond
+  - action: media_player.shuffle_set
+    data:
+      shuffle: true
+    target:
+      device_id: e11515b5cbbf2bd85bfedc2570404694
+  - action: music_assistant.play_media
+    data:
+      media_type: playlist
+      media_id: Bedtijd Jeroen
+      enqueue: replace
+    target:
+      device_id: e11515b5cbbf2bd85bfedc2570404694
 het_eten_is_klaar:
   sequence:
   - action: automation.turn_on
@@ -64,34 +59,59 @@ het_eten_is_klaar:
   description: ''
   icon: mdi:food
 telegram_message_familyapp:
-  alias: "Centrale Telegram Router"
-  description: "Stuurt berichten naar de Test- of Familie-chat op basis van labels."
+  alias: Centrale Telegram Router
+  description: Stuurt berichten naar de Test- of Familie-chat op basis van labels.
   fields:
     message_text:
-      description: "De tekst van het bericht"
-      example: "De wasmachine is klaar"
+      description: De tekst van het bericht
+      example: De wasmachine is klaar
       required: true
     caller_id:
-      description: "ID van de aanroepende automatisering (gebruik {{ this.entity_id }})"
-      example: "automation.ip_check"
+      description: ID van de aanroepende automatisering (gebruik {{ this.entity_id
+        }})
+      example: automation.ip_check
       required: true
   sequence:
-    - variables:
-        # Check of 'test' (hoofdletterongevoelig) in de labels staat
-        is_test: >
-          {{ 'test' in labels(caller_id) | map('lower') | list if caller_id is defined else false }}
-        
-        # Bepaal de juiste notify entiteit
-        target_entity: >
-          {% if is_test %}
-            notify.telegram_bot_8053303995_15473309
-          {% else %}
-            notify.telegram_thuisapp
-          {% endif %}
+  - variables:
+      is_test: '{{ ''test'' in labels(caller_id) | map(''lower'') | list if caller_id
+        is defined else false }}
 
-    # Voer de actie uit op de gekozen entiteit
-    - action: notify.send_message
-      target:
-        entity_id: "{{ target_entity }}"
-      data:
-        message: "{{ message_text }}"
+        '
+      target_entity: "{% if is_test %}\n  notify.telegram_bot_8053303995_15473309\n{%
+        else %}\n  notify.telegram_thuisapp\n{% endif %}\n"
+  - action: notify.send_message
+    target:
+      entity_id: '{{ target_entity }}'
+    data:
+      message: '{{ message_text }}'
+telegram_dynamische_status:
+  alias: Telegram Dynamische Status
+  description: Genereert een dynamisch overzicht van lichten, schakelaars en covers.
+  fields:
+    chat_id:
+      description: De chat ID waar het bericht naar toe moet.
+    message_id:
+      description: De ID van het bericht dat bewerkt moet worden.
+  sequence:
+  - action: telegram_bot.edit_message
+    data:
+      chat_id: '{{ chat_id }}'
+      message_id: '{{ message_id }}'
+      title: "\U0001F3E0 *Huidige Huis Status*"
+      message: "{# Configuratie van iconen per domein en status #} {% set icon_map
+        = {\n  'light': { 'on': '\U0001F4A1', 'off': '\U0001F311' },\n  'switch':
+        { 'on': '\U0001F50C', 'off': '⚪' },\n  'cover': { 'open': '\U0001F53C', 'closed':
+        '\U0001F53D', 'opening': '⬆️', 'closing': '⬇️' }\n} %} {% set domains = ['light',
+        'switch', 'cover'] %}\n{%- for domain in domains %}\n  {%- set entities =
+        states[domain] | sort(attribute='attributes.friendly_name') | list %}\n  {%-
+        if entities | count > 0 %}\n\n  *{{ domain | upper }}S*\n  {%- for s in entities
+        %}\n    {%- set state = s.state %}\n    {# Kies icoon uit map, fallback naar
+        vraagteken #}\n    {%- set icon = icon_map[domain][state] if state in icon_map[domain]
+        else '❓' %}\n    {# Extra check voor covers in tussenstand #}\n    {%- if
+        domain == 'cover' and state not in ['open', 'closed', 'opening', 'closing']
+        %}\n      {%- set icon = '↕️' %}\n    {%- endif %}\n    {{ icon }} {{ s.attributes.friendly_name
+        or s.name }}: {{ s.state | replace('on','aan') | replace('off','uit') | replace('open','omhoog')
+        | replace('closed','omlaag') }}\n  {%- endfor %}\n{%- endif %} {%- endfor
+        %}\n\U0001F321️ *Temperatuur:* {{ states('sensor.thuis_temperatuur') }}°C\n"
+      inline_keyboard:
+      - "\U0001F519 Terug naar Menu:/menu_cmd"

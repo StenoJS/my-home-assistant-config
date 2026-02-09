@@ -92,11 +92,12 @@
     tag_id: 7d6c5bbb-edd2-4bf8-abe7-982bf05577c5
   conditions: []
   actions:
-  - action: script.send_telegram_message
+  - action: notify.send_message
+    target:
+      entity_id: notify.telegram_thuisapp
     data:
-      message_text: "\U0001F634 Linda gaat slapen. Welterusten!"
-      caller_id: '{{ this.entity_id }}'
-      disable_notification: true
+      message: Linda gaat slapen
+      title: Weltrusten!
   - action: light.turn_off
     metadata: {}
     data: {}
@@ -239,10 +240,10 @@
   description: Regardless if started from TV remote or via wake-on-lan, the TV will
     switch to YouTube right after it is on
   triggers:
-  - device_id: 8c2a6fcaa4205408f5a711cbb2c711e5
+  - type: changed_states
+    device_id: 8c2a6fcaa4205408f5a711cbb2c711e5
+    entity_id: 0ce007457b099a74773a5609330773d8
     domain: media_player
-    entity_id: media_player.lg_webos_tv_oled55cx9la
-    type: turned_on
     trigger: device
   conditions: []
   actions:
@@ -265,41 +266,7 @@
   - action: webostv.button
     metadata: {}
     data:
-      entity_id: media_player.lg_webos_tv_oled55cx9la
-      button: ENTER
-  mode: single
-- id: '1759604771780'
-  alias: Switch2 kiezen op TV Serre
-  description: Switch2 kiezen op TV Serre
-  triggers:
-  - device_id: 8c2a6fcaa4205408f5a711cbb2c711e5
-    domain: media_player
-    entity_id: media_player.lg_webos_tv_oled55cx9la
-    type: turned_on
-    trigger: device
-    enabled: false
-  conditions: []
-  actions:
-  - delay:
-      hours: 0
-      minutes: 0
-      seconds: 2
-      milliseconds: 0
-  - action: media_player.select_source
-    metadata: {}
-    data:
-      source: Switch2
-    target:
-      device_id: 8c2a6fcaa4205408f5a711cbb2c711e5
-  - delay:
-      hours: 0
-      minutes: 0
-      seconds: 2
-      milliseconds: 0
-  - action: webostv.button
-    metadata: {}
-    data:
-      entity_id: media_player.lg_webos_tv_oled55cx9la
+      entity_id: media_player.serre_televisie
       button: ENTER
   mode: single
 - id: '1760282282958'
@@ -321,83 +288,11 @@
       media_player_entity_id: media_player.huis
     target:
       device_id: ae4f80b8aade1f304ae2d88f2f17404b
-  - action: notify.telegram_family
+  - action: notify.send_message
+    target:
+      entity_id: notify.telegram_thuisapp
     data:
       message: "\U0001F9FA De droger is klaar!"
-  mode: single
-- id: '1760389566643'
-  alias: Jeroen muziek slapen
-  description: ''
-  triggers:
-  - trigger: state
-    entity_id:
-    - input_boolean.jeroen_gaat_slapen
-    from: 'off'
-    to: 'on'
-    enabled: true
-  conditions: []
-  actions:
-  - action: media_player.shuffle_set
-    metadata: {}
-    data:
-      shuffle: true
-    target:
-      device_id: e11515b5cbbf2bd85bfedc2570404694
-  - action: tts.speak
-    metadata: {}
-    data:
-      cache: true
-      message: Welterusten {{ friendly_user_name }}, slaap lekker en tot morgen!
-      media_player_entity_id: media_player.begane_grond_2
-    target:
-      device_id: ae4f80b8aade1f304ae2d88f2f17404b
-  - device_id: 1b482ea89bb835f7073b5ee7605ff2e0
-    domain: cover
-    entity_id: 83a2e6105a67dd0ad5a3300b449fb74b
-    type: close
-  - action: light.turn_off
-    metadata: {}
-    data: {}
-    target:
-      floor_id: begane_grond
-  - action: input_boolean.turn_off
-    metadata: {}
-    data: {}
-    target:
-      entity_id: input_boolean.jeroen_gaat_slapen
-  - action: media_player.volume_set
-    metadata: {}
-    data:
-      volume_level: 0.2
-    target:
-      device_id: e11515b5cbbf2bd85bfedc2570404694
-  - action: music_assistant.play_media
-    data:
-      media_type: playlist
-      enqueue: replace
-      media_id: library://playlist/3
-    target:
-      device_id: e11515b5cbbf2bd85bfedc2570404694
-  - wait_for_trigger:
-    - trigger: state
-      entity_id:
-      - person.jeroen
-      - sensor.telefoon_jeroen_sleep_confidence
-      for:
-        hours: 0
-        minutes: 5
-        seconds: 0
-      to: '70'
-    continue_on_timeout: false
-  - action: media_player.media_stop
-    metadata: {}
-    data: {}
-    target:
-      device_id: e11515b5cbbf2bd85bfedc2570404694
-  - type: turn_off
-    device_id: bf7a8a2177420bfc77160a870bf21f1c
-    entity_id: 73498bf055ffe818178047cc6a1b6086
-    domain: light
   mode: single
 - id: '1760642111321'
   alias: Tag Mika is gescand
@@ -631,35 +526,6 @@
     target:
       device_id: ae4f80b8aade1f304ae2d88f2f17404b
   mode: single
-- id: '1761596815074'
-  alias: Nieuwe automatisering TAG
-  description: Leest de naam van de gebruiker die een specifieke tag scant en stuurt
-    Telegram bericht.
-  triggers:
-  - trigger: event
-    event_type: tag_scanned
-    event_data:
-      tag_id: 8f763d16-01f9-4eac-b289-3f55b8d59ef9
-  actions:
-  - variables:
-      user_id: '{{ trigger.event.context.user_id }}'
-      friendly_user_name: '{% set person = states.person | selectattr(''attributes.user_id'',
-        ''eq'', user_id) | first | default(none) %} {{ person.attributes.friendly_name
-        if person else ''Iemand'' }}
-
-        '
-  - action: script.send_telegram_message
-    data:
-      message_text: "\U0001F7E2 Tag 'Test wit' succesvol gescand door {{ friendly_user_name
-        }}."
-      user_name: '{{ friendly_user_name }}'
-  - action: tts.speak
-    target:
-      entity_id: media_player.keuken
-    data:
-      media_player_entity_id: media_player.keuken
-      message: Welterusten {{ friendly_user_name }}, slaap lekker en tot morgen!
-  mode: single
 - id: '1761990153065'
   alias: Wasmachine
   description: Stuurt een melding wanneer de wasmachine klaar is.
@@ -713,7 +579,7 @@
       '
   - condition: template
     value_template: '{{ (now() - trigger.from_state.last_changed).total_seconds()
-      > 120 }}
+      > 360 }}
 
       '
   - condition: device
@@ -727,6 +593,7 @@
     enabled: false
   actions:
   - action: light.turn_on
+    data: {}
     target:
       entity_id: light.eetkamer_hanglamp_3
   - delay:
@@ -734,13 +601,13 @@
       minutes: 15
       seconds: 0
       milliseconds: 0
-    enabled: false
+    enabled: true
   - action: light.turn_off
     metadata: {}
+    data: {}
+    enabled: true
     target:
       entity_id: light.eetkamer_hanglamp_3
-    data: {}
-    enabled: false
   mode: single
 - id: '1763327431528'
   alias: Verwarming serre uit
@@ -834,24 +701,14 @@
     device_id: 74bde970801a33bb48933be45063fddb
     entity_id: 50ee8fe14033d1cea1aaa869554c9b49
     domain: switch
-  - action: notify.telegram_family
+  - action: notify.send_message
+    target:
+      entity_id: notify.telegram_thuisapp
     metadata: {}
     data:
       message: Bedverwarming Yulian aangezet
       title: "\U0001F6CC\U0001F3FC Bedverwarming"
   mode: single
-- id: '1769614519355'
-  alias: 'Test Matter Knop: Eettafel 5'
-  description: Schakel Eettafel 5 met de BILRESA Knop 1 via State Trigger
-  triggers:
-  - entity_id: event.bilresa_dual_button_knop_1
-    trigger: state
-  actions:
-  - action: light.toggle
-    target:
-      entity_id: light.eetkamer_hanglamp_5
-    data: {}
-  mode: restart
 - id: '1769938287333'
   alias: Ventilator badkamer uit na x tijd
   description: ''
@@ -872,16 +729,239 @@
     entity_id: 933172b9479cb53c41aebb00bb280509
     domain: switch
   mode: single
-- id: '1769943409482'
-  alias: "\U0001F6BD\U0001F4A1 Smart Bathroom Occupancy Light Control"
+- id: telegram_callback_handler
+  alias: Telegram - Callback Handler
+  description: ''
+  triggers:
+  - trigger: event
+    event_type: telegram_callback
+  actions:
+  - action: telegram_bot.answer_callback_query
+    data:
+      callback_query_id: '{{ trigger.event.data.id }}'
+      message: Laden...
+  - variables:
+      parts: '{{ trigger.event.data.data.split('':'') }}'
+      cmd: '{{ parts[0] }}'
+      target: '{{ parts[1] if parts|length > 1 else '''' }}'
+      extra: '{{ parts[2] if parts|length > 2 else '''' }}'
+  - choose:
+    - conditions:
+      - condition: template
+        value_template: '{{ cmd == ''/f'' }}'
+      sequence:
+      - variables:
+          rooms: '{% if target == ''Zolder'' %} [''Mika'', ''Overloop'', ''Bergruimte'']
+            {% elif target == ''1e Verdieping'' %} [''Slaapkamer'', ''Kantoor'', ''Yulian'',
+            ''Badkamer''] {% elif target == ''Begane Grond'' %} [''Woonkamer'', ''Eetkamer'',
+            ''Serre'', ''Keuken'', ''Schuur'', ''Hal''] {% else %} [] {% endif %}
+
+            '
+      - action: telegram_bot.edit_message
+        data:
+          chat_id: '{{ trigger.event.data.chat_id }}'
+          message_id: '{{ trigger.event.data.message.message_id }}'
+          title: "\U0001F4CD {{ target }}"
+          message: 'Kies een kamer:'
+          inline_keyboard: "{% set ns = namespace(buttons=[]) %} {% for room in rooms
+            %}\n  {% set ns.buttons = ns.buttons + [\"\U0001F6AA \" ~ room ~ \":/r:\"
+            ~ room ~ \":\" ~ target] %}\n{% endfor %} {{ ns.buttons + [\"\U0001F519
+            Terug:/menu_cmd\"] }}\n"
+    - conditions:
+      - condition: template
+        value_template: '{{ cmd == ''/r'' }}'
+      sequence:
+      - variables:
+          entities: '{{ area_entities(target) or area_entities(target|lower|replace(''
+            '',''_'')) }}'
+      - if:
+        - condition: template
+          value_template: '{{ entities == none or entities | count == 0 }}'
+        then:
+        - action: telegram_bot.edit_message
+          data:
+            chat_id: '{{ trigger.event.data.chat_id }}'
+            message_id: '{{ trigger.event.data.message.message_id }}'
+            message: ⚠️ Geen apparaten gevonden in '{{ target }}'.
+            inline_keyboard:
+            - "\U0001F519 Terug:/f:{{ extra }}"
+        else:
+        - action: telegram_bot.edit_message
+          data:
+            chat_id: '{{ trigger.event.data.chat_id }}'
+            message_id: '{{ trigger.event.data.message.message_id }}'
+            title: "\U0001F4A1 {{ target }}"
+            message: 'Bediening:'
+            inline_keyboard: "{% set ns = namespace(buttons=[]) %} {% set devs = expand(entities)
+              \n    | selectattr('domain', 'in', ['light','switch','media_player','cover','lock'])
+              \n    | sort(attribute='name') %}\n{% for dev in devs %}\n  {% set icon
+              = '\U0001F7E1' if dev.state in ['on','open','unlocked'] else '⚫' %}\n
+              \ {% set label = icon ~ \" \" ~ dev.name %}\n  {% set ns.buttons = ns.buttons
+              + [label ~ \":/t:\" ~ dev.entity_id ~ \":\" ~ target ~ \":\" ~ extra]
+              %}\n{% endfor %} {{ ns.buttons + [\"\U0001F519 Terug:/f:\" ~ extra,
+              \"\U0001F3E0 Menu:/menu_cmd\"] }}\n"
+    - conditions:
+      - condition: template
+        value_template: '{{ cmd == ''/t'' }}'
+      sequence:
+      - action: homeassistant.toggle
+        target:
+          entity_id: '{{ target }}'
+      - delay: 00:00:01
+      - action: telegram_bot.edit_message
+        data:
+          chat_id: '{{ trigger.event.data.chat_id }}'
+          message_id: '{{ trigger.event.data.message.message_id }}'
+          message: 'Status bijgewerkt voor {{ state_attr(target, ''friendly_name'')
+            or ''apparaat'' }}:'
+          inline_keyboard: "{% set room_name = extra %} {% set floor_name = parts[3]
+            if parts|length > 3 else '' %} {% set entities = area_entities(room_name)
+            or area_entities(room_name|lower|replace(' ','_')) %} {% set ns = namespace(buttons=[])
+            %} {% set devs = expand(entities) | selectattr('domain', 'in', ['light','switch','media_player','cover','lock'])
+            | sort(attribute='name') %} {% for dev in devs %}\n  {% set icon = '\U0001F7E1'
+            if dev.state in ['on','open','unlocked'] else '⚫' %}\n  {% set label =
+            icon ~ \" \" ~ dev.name %}\n  {% set ns.buttons = ns.buttons + [label
+            ~ \":/t:\" ~ dev.entity_id ~ \":\" ~ room_name ~ \":\" ~ floor_name] %}\n{%
+            endfor %} {{ ns.buttons + [\"\U0001F519 Terug:/f:\" ~ floor_name, \"\U0001F3E0
+            Hoofdmenu:/menu_cmd\"] }}\n"
+    - conditions:
+      - condition: template
+        value_template: '{{ cmd == ''/menu_cmd'' }}'
+      sequence:
+      - action: telegram_bot.edit_message
+        data:
+          chat_id: '{{ trigger.event.data.chat_id }}'
+          message_id: '{{ trigger.event.data.message.message_id }}'
+          title: "\U0001F3E1 Huize Steenhagen"
+          message: 'Kies een verdieping:'
+          inline_keyboard:
+          - "\U0001F3DA️ Zolder:/f:Zolder"
+          - "\U0001F6CF️ 1e Verdieping:/f:1e Verdieping"
+          - "\U0001F6CB️ Begane Grond:/f:Begane Grond"
+          - "\U0001F4CA Status:/status, \U0001F3AC Scenes:/scenes"
+    - conditions:
+      - condition: template
+        value_template: '{{ cmd == ''/status'' }}'
+      sequence:
+      - action: telegram_bot.edit_message
+        data:
+          chat_id: '{{ trigger.event.data.chat_id }}'
+          message_id: '{{ trigger.event.data.message.message_id }}'
+          message: "\U0001F321️ Woonkamer: {{ states('sensor.thermostaat_temperatuur')
+            }}°C"
+          inline_keyboard:
+          - "\U0001F519 Terug:/menu_cmd"
+    - conditions:
+      - condition: template
+        value_template: '{{ cmd == ''/scenes'' }}'
+      sequence:
+      - action: telegram_bot.edit_message
+        data:
+          chat_id: '{{ trigger.event.data.chat_id }}'
+          message_id: '{{ trigger.event.data.message.message_id }}'
+          message: 'Scenes:'
+          inline_keyboard:
+          - "\U0001F634 Jeroen Slaapt:/call:automation.trigger:automation.jeroen_slaapt"
+          - "\U0001F519 Terug:/menu_cmd"
+- id: '1770238456955'
+  alias: Nieuwe automatisering overloop
   description: ''
   use_blueprint:
-    path: muratcesmecioglu/smart-bathroom.yaml
+    path: aledziko/ikea-myggspray-e2494-matter-motion-sensor.yaml
     input:
-      motion_sensor: binary_sensor.myggspray_wrlss_mtn_sensor_bezetting
-      door_sensor: binary_sensor.myggbett_door_window_sensor_deur
-      light_switch: light.eetkamer_hanglamp_5
-      occupancy_helper: input_boolean.wc_bezet
-      entering_helper: input_boolean.wc_binnengegaan
-      entered_helper: input_boolean.wc_bezet_2
-      exiting_helper: input_boolean.wc_uitgegaan
+      motion_entity: binary_sensor.myggspray_wrlss_mtn_sensor_bezetting
+      motion_on_action:
+      - action: light.turn_on
+        metadata: {}
+        data: {}
+        target:
+          entity_id: light.zolder_trapopgang
+      illuminance_low_threshold: 1225
+      motion_off_action:
+      - action: light.turn_off
+        metadata: {}
+        data: {}
+        target:
+          entity_id:
+          - light.zolder_trapopgang
+      no_motion_wait: 30
+      battery_entity: sensor.myggspray_wrlss_mtn_sensor_batterij
+      battery_low_threshold: 20
+      battery_low_action:
+      - action: notify.send_message
+        metadata: {}
+        data: {}
+- id: '1770410100841'
+  alias: IKEA BILRESA E2489 Dual Button (Matter)
+  description: ''
+  use_blueprint:
+    path: censay/ikea-bilresa-e2489-matter-smart-button.yaml
+    input:
+      target_device: f20ebbe6e95c14fedc825beefa811a49
+      button1_event: event.bilresa_dual_button_knop_1
+      button2_event: event.bilresa_dual_button_knop_2
+      button1_single:
+      - action: light.toggle
+        metadata: {}
+        data: {}
+        target:
+          entity_id: light.zolder_mika
+      button1_double:
+      - action: light.toggle
+        metadata: {}
+        target:
+          entity_id: light.zolder_overloop
+        data: {}
+      button2_single:
+      - action: light.toggle
+        metadata: {}
+        target:
+          entity_id: light.zolder_bergruimte
+        data: {}
+      button2_double:
+      - action: light.toggle
+        metadata: {}
+        target:
+          entity_id: light.zolder_trapopgang
+        data: {}
+- id: '1770644575822'
+  alias: NFC Bedtijd Routine Mika
+  description: ''
+  use_blueprint:
+    path: bedtijd.yaml
+    input:
+      telegram_service: notify.telegram_thuisapp
+      person_name: Mika
+      user_device: fbdcdc063cb7602e8a15223576b7fc7a
+      bedroom_light:
+        area_id: slaapkamer_yulian
+      media_player: media_player.yulian
+      playlist_id: library://playlist/49
+      nfc_tag: Bedtijd
+- id: telegram_battery_direct_alert
+  alias: 'Telegram: Batterij Alert (Direct)'
+  description: ''
+  triggers:
+  - event_type: state_changed
+    trigger: event
+  conditions:
+  - condition: template
+    value_template: "{% set state = trigger.event.data.new_state %} {% set old_state
+      = trigger.event.data.old_state %} {{ state is not none \n   and state.entity_id.startswith('binary_sensor.')\n
+      \  and state.attributes.device_class == 'battery'\n   and state.state == 'on'\n
+      \  and (old_state is none or old_state.state != 'on') }}\n"
+  actions:
+  - action: notify.send_message
+    target:
+      entity_id: notify.telegram_thuisapp
+    data:
+      title: "\U0001F6A8 *Batterij Alert*"
+      message: "{% set entity_id = trigger.event.data.entity_id %} De batterij van
+        *{{ state_attr(entity_id, 'friendly_name') | replace(' battery low', '') }}*
+        is leeg.\n\U0001F4CD *Locatie:* {{ area_name(entity_id) or 'Niet toegewezen'
+        }} \U0001F50B *Type:* {{ state_attr(entity_id, 'battery_type') or 'Onbekend'
+        }}\n"
+      data:
+        parse_mode: Markdown
+  mode: parallel
+  max: 10

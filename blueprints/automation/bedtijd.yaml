@@ -1,0 +1,95 @@
+blueprint:
+  name: "NFC Bedtijd Routine (Music Assistant) - Fixed"
+  description: "Start een bedtijd routine gebaseerd op een NFC scan van een specifiek toestel. Gebruik de Tag ID (niet de naam) van de Home Assistant Tags pagina."
+  domain: automation
+  input:
+    nfc_tag:
+      name: NFC Tag ID
+      description: "De unieke ID van de tag. Ga naar Instellingen > Tags om de ID te kopiëren (bijv: 'test' of 'genie')."
+      selector:
+        text: {}
+    user_device:
+      name: Toestel Identificatie
+      description: De mobiele telefoon die de tag scant (om de gebruiker te herkennen).
+      selector:
+        device:
+          integration: mobile_app
+    bedroom_light:
+      name: Slaapkamer Verlichting
+      description: De lamp die aan moet gaan.
+      selector:
+        target:
+          entity:
+            domain: light
+    media_player:
+      name: Media Player
+      description: De Music Assistant speler waar de muziek op moet starten.
+      selector:
+        entity:
+          domain: media_player
+    playlist_id:
+      name: Music Assistant URI
+      description: "De URI van je muziek. Voor MASS is dit bijv: 'library://playlist/Slaapliedjes' of een Spotify URI."
+      default: ""
+    media_type:
+      name: Media Type
+      description: "Het type media dat je afspeelt (meestal 'playlist' voor bedtijd)."
+      default: "playlist"
+      selector:
+        select:
+          options:
+            - playlist
+            - album
+            - track
+            - radio
+    telegram_service:
+      name: Telegram Notificatie Service
+      description: De service waarnaar het bericht gestuurd moet worden.
+      selector:
+        text: {}
+      default: "notify.telegram_family"
+    person_name:
+      name: Naam van de persoon
+      description: De naam die in het Telegram bericht verschijnt.
+      selector:
+        text: {}
+
+mode: single
+
+trigger:
+  - platform: event
+    event_type: tag_scanned
+    event_data:
+      tag_id: !input nfc_tag
+      device_id: !input user_device
+
+action:
+  # 1. Lamp aan op een warme, lage stand
+  - action: light.turn_on
+    target: !input bedroom_light
+    data:
+      brightness_pct: 20
+      kelvin: 2000 # Warm licht voor de avond
+      transition: 5
+
+  # 2. Telegram bericht (Modernized)
+  - action: notify.send_message
+    target:
+      entity_id: !input telegram_entity # We hernoemen dit even voor de duidelijkheid
+    data:
+      message: "💤 {{ person_name }} heeft de slaap-tag gescand. Weltrusten!"
+      title: "Bedtijd Routine"
+
+  # 3. Muziek starten via Music Assistant
+  - if:
+      - condition: template
+        value_template: "{{ playlist_id != '' }}"
+    then:
+      - action: media_player.play_media
+        target:
+          entity_id: !input media_player
+        data:
+          media_content_id: !input playlist_id
+          media_content_type: !input media_type
+          extra:
+            announce: false # MASS specifieke optie

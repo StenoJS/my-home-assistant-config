@@ -3,7 +3,6 @@ light:
   # SPECIFIEKE SUB-GROEPEN
   # ---------------------------------------------------------
   
-  # Nieuwe groep voor de 3 plafondspots
   - platform: group
     name: "Woonkamer Plafond"
     unique_id: light_group_woonkamer_plafond
@@ -12,7 +11,6 @@ light:
       - light.woonkamer_plafond_2
       - light.woonkamer_plafond_3
 
-  # Nieuwe groep voor de 5 hanglampen (Eettafel)
   - platform: group
     name: "Eettafel"
     unique_id: light_group_eettafel
@@ -23,6 +21,47 @@ light:
       - light.eetkamer_hanglamp_4
       - light.eetkamer_hanglamp_5
 
+  - platform: group
+    name: "Serre Plafond"
+    unique_id: light_group_serre_plafond
+    entities:
+      - light.serre_plafond_1
+      - light.serre_plafond_2
+      - light.serre_plafond_3
+
+      # --- NIEUWE GROEPEN ZOLDER ---
+#  - platform: group
+#    name: "Mika Zolder" # Dit wordt light.mika_zolder
+#    unique_id: light_group_zolder_mika
+#    entities:
+#      - light.mika_1
+#      - light.mika_2
+
+#  - platform: group
+#    name: "Overloop Zolder" # Dit wordt light.overloop_zolder
+#    unique_id: light_group_zolder_overloop
+#    entities:
+#      # De uit-gecommenteerde lampen weggelaten voor de netheid
+#      - light.zolder_overloop_1
+#      - light.zolder_overloop_2
+#      - light.zolder_overloop_3
+
+#  - platform: group
+#    name: "Trapopgang Zolder" # Dit wordt light.trapopgang_zolder
+#    unique_id: light_group_zolder_trapopgang
+#    entities:
+#      # De uit-gecommenteerde lampen weggelaten voor de netheid
+#      - light.zolder_trapopgang_1
+#      - light.zolder_trapopgang_2
+#      - light.zolder_trapopgang_3
+
+#  - platform: group
+#    name: "Bergruimte Zolder" # Dit wordt light.bergruimte_zolder
+#    unique_id: light_group_zolder_bergruimte
+#    entities:
+#      - light.bergruimte_1
+#      - light.bergruimte_2
+
   # ---------------------------------------------------------
   # BEGANE GROND (HOOFDGROEP)
   # ---------------------------------------------------------
@@ -30,19 +69,11 @@ light:
     name: "Verlichting Begane Grond"
     unique_id: light_group_zone_begane_grond
     entities:
-      # --- Geneste Groepen ---
-      - light.woonkamer_plafond  # Verwijst naar de groep hierboven
-      - light.eettafel           # Verwijst naar de groep hierboven
-      
-      # --- Losse Lampen ---
-      # Serre (kan evt. ook een eigen groep worden als je wilt)
-      - light.serre_plafond_1
-      - light.serre_plafond_2
-      - light.serre_plafond_3
-      # Overig
+      - light.woonkamer_plafond
+      - light.eettafel
+      - light.serre_plafond # Verwijst nu naar de subgroep hierboven
       - light.schuur_1
-      - light.tuin_overkapping_lamp
-      # - light.woonkamer_staande_lamp (Stond in commentaar in je origineel)
+      - light.tuin_overkapping
 
   # ---------------------------------------------------------
   # 1E VERDIEPING
@@ -56,14 +87,16 @@ light:
       - light.kantoor_plafond
 
   # ---------------------------------------------------------
-  # ZOLDER
+  # ZOLDER (HOOFDGROEP - NU GENEST)
   # ---------------------------------------------------------
   - platform: group
     name: "Verlichting Zolder"
     unique_id: light_group_zone_zolder
     entities:
-      - light.slaapkamer_mika_plafond_1
-      - light.slaapkamer_mika_plafond_2
+      - light.zolder_mika       # Matcht nu met de naam hierboven
+      - light.zolder_overloop   # Matcht nu met de naam hierboven
+      - light.zolder_trapopgang   # Matcht nu met de naam hierboven
+      - light.zolder_bergruimte # Matcht nu met de naam hierboven
 
   # ---------------------------------------------------------
   # HELE HUIS (MASTER)

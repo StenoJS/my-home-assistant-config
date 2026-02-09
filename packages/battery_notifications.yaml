@@ -1,0 +1,71 @@
+###############################################################################
+# PACKAGE: Battery Notifications (Corrected for Spook 👻)
+###############################################################################
+
+automation:
+  # 1. DIRECTE MELDING: Gebruikt 'state_changed' event om de trigger-fout te voorkomen
+  - alias: "Telegram: Batterij Alert (Direct)"
+    id: telegram_battery_direct_alert
+    mode: parallel
+    max: 10
+    trigger:
+      - platform: event
+        event_type: state_changed
+    condition:
+      - condition: template
+        # Filter: Moet een binary_sensor zijn, device_class battery hebben, en naar 'on' gaan
+        value_template: >
+          {% set state = trigger.event.data.new_state %}
+          {% set old_state = trigger.event.data.old_state %}
+          {{ state is not none 
+             and state.entity_id.startswith('binary_sensor.')
+             and state.attributes.device_class == 'battery'
+             and state.state == 'on'
+             and (old_state is none or old_state.state != 'on') }}
+    action:
+      - action: notify.send_message
+        target:
+          entity_id: notify.telegram_thuisapp
+        data:
+          title: "🚨 *Batterij Alert*"
+          message: >
+            {% set entity_id = trigger.event.data.entity_id %}
+            De batterij van *{{ state_attr(entity_id, 'friendly_name') | replace(' battery low', '') }}* is leeg.
+            
+            📍 *Locatie:* {{ area_name(entity_id) or 'Niet toegewezen' }}
+            🔋 *Type:* {{ state_attr(entity_id, 'battery_type') or 'Onbekend' }}
+          data:
+            parse_mode: "Markdown"
+
+  # 2. DAGELIJKSE REMINDER
+  - alias: "Telegram: Dagelijks Batterij Overzicht"
+    id: telegram_battery_daily_summary
+    trigger:
+      - platform: time
+        at: "09:00:00"
+    condition:
+      - condition: template
+        value_template: >
+          {{ states.binary_sensor 
+             | selectattr('attributes.device_class', 'defined')
+             | selectattr('attributes.device_class', 'eq', 'battery')
+             | selectattr('state', 'eq', 'on')
+             | list | count > 0 }}
+    action:
+      - action: notify.send_message
+        target:
+          entity_id: notify.telegram_thuisapp
+        data:
+          title: "📋 *Nog te vervangen batterijen*"
+          message: >
+            De volgende apparaten hebben nog steeds een lege batterij:
+            
+            {% set low_bats = states.binary_sensor 
+              | selectattr('attributes.device_class', 'defined')
+              | selectattr('attributes.device_class', 'eq', 'battery')
+              | selectattr('state', 'eq', 'on') %}
+            {% for bat in low_bats %}
+            - *{{ bat.attributes.friendly_name | replace(' battery low', '') }}* ({{ area_name(bat.entity_id) or 'geen ruimte' }}) -> {{ state_attr(bat.entity_id, 'battery_type') or 'onbekend type' }}
+            {% endfor %}
+          data:
+            parse_mode: "Markdown"

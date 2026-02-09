@@ -2,7 +2,6 @@
 default_config:
 
 cloud:
-
     # Load frontend themes from the themes folder
 frontend:
   themes: !include_dir_merge_named themes
@@ -14,26 +13,33 @@ scene: !include scenes.yaml
 # allowlist
 homeassistant:
   packages: !include_dir_named packages
-  
   allowlist_external_dirs:
 #    - '/share/data'
     - "/media"
     - "/tmp"
+    - "/config"
 
 http:
   use_x_forwarded_for: true
   trusted_proxies:
     - 172.30.33.0/24
 
-notify:
-  - name: telegram_family
-    platform: telegram
-    chat_id: !secret telegram_chatid_family
+#notify:
+#  - name: telegram_thuisapp
+#    platform: telegram
+#    chat_id: !secret telegram_chatid_family
 
-  - name: telegram_test
-    platform: telegram
-    chat_id: !secret telegram_chatid_test
+#  - name: telegram_test
+#    platform: telegram
+#    chat_id: !secret telegram_chatid_test
 
-  - name: telegram_jeroen
-    platform: telegram
-    chat_id: !secret telegram_id_jeroen
+#  - name: telegram_jeroen
+#    platform: telegram
+#    chat_id: !secret telegram_id_jeroen
+
+#  - name: tv_serre
+#    platform: telegram
+#    chat_id: !secret telegram_id_jeroen
+
+# zacs/HA-Energycalc module  
+energycalc:

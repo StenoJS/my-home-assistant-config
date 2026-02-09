@@ -155,12 +155,10 @@ automation:
 
           - conditions: "{{ cmd == '/status' }}"
             sequence:
-              - action: telegram_bot.edit_message
+              - action: script.status_telegram_dynamisch
                 data:
                   chat_id: "{{ trigger.event.data.chat_id }}"
                   message_id: "{{ trigger.event.data.message.message_id }}"
-                  message: "🌡️ Woonkamer: {{ states('sensor.thuis_temperatuur') }}°C"
-                  inline_keyboard: ["🔙 Terug:/menu_cmd"]
 
           - conditions: "{{ cmd == '/scenes' }}"
             sequence:

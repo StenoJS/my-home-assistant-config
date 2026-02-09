@@ -214,6 +214,9 @@ automation:
                 data:
                   callback_query_id: "{{ trigger.event.data.id }}"
 
+# Update voor STAP 3: UITVOEREN (Family Link)
+# Zoek dit blok op in je familylink.yaml rond regel 155
+
           # ------------------------------------------------------
           # STAP 3: UITVOEREN (Family Link)
           # ------------------------------------------------------
@@ -228,18 +231,20 @@ automation:
                   - variables:
                       payload: "{{ trigger.event.data.data.split(':') }}"
                       code: "{{ payload[1] }}"
-                      minutes: "{{ payload[2] }}"
-                      # CORRECTIE: Entity IDs
+                      minutes: "{{ payload[2] | int }}" # Forceer integer
                       target_entity: "{{ {'m_p':'switch.mika_telefoon_family_link','m_t':'switch.mika_tablet_family_link','y_p':'switch.yulian_telefoon_family_link','y_t':'switch.yulian_tablet_family_link'}[code] }}"
+                  
+                  # Gebruik de moderne 'action' syntax en controleer de parameters
                   - action: familylink.add_time_bonus
                     data:
                       entity_id: "{{ target_entity }}"
                       bonus_minutes: "{{ minutes }}"
+                  
                   - action: telegram_bot.edit_message
                     data:
                       message_id: "{{ trigger.event.data.message.message_id }}"
                       chat_id: "{{ current_chat_id }}"
-                      message: "✅ **Goedgekeurd door {{ approver_name }}!**\nEr is {{ minutes }} min toegevoegd."
+                      message: "✅ **Goedgekeurd door {{ approver_name }}!**\nEr is {{ minutes }} min toegevoegd aan {{ target_entity.split('.')[1] | replace('_', ' ') }}."
                       inline_keyboard: []
                 else:
                   - action: telegram_bot.answer_callback_query
